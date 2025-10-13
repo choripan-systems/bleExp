@@ -6,7 +6,7 @@ The app automatically reads the value of all the readable characteristics, and l
 
 The app also lets the user enable or disable notifications/indications on any charactersitic that supports them, and the notifications/indications received from the BLE device are shown on the app's output log.
 
-The image below shows the **bleExp** app connected to a Wahoo TICKR Heart Rate sensor that supports the BLE SIG [Heart Rate Service](https://www.bluetooth.com/specifications/specs/html/?src=HRS_v1.0/out/en/index-en.html), with UUID 0x180D:
+The image below shows the **bleExp** app connected to a Wahoo TICKR Heart Rate sensor that supports the BLE SIG's [Heart Rate Service](https://www.bluetooth.com/specifications/specs/html/?src=HRS_v1.0/out/en/index-en.html) and [Device Information Service](https://www.bluetooth.org/docman/handlers/downloaddoc.ashx?doc_id=244369&_gl=1*vekdxv*_gcl_au*MTQ5OTA1NTk2OS4xNzU2Mzk2MTMy), along with a few custom (private) services:
 
 ![bleExp app connected to a Wahoo TICKR HRM device](./assets/bleExp-Wahoo-TICKR.png)
 
