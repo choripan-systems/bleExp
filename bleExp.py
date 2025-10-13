@@ -232,6 +232,7 @@ class BLEScanner:
         self.update_status("Scanning...", "green")
         
         matching_devices = []
+        device_adv_data = {}  # Store advertisement data for each device
         
         def detection_callback(device, advertisement_data):
             """Called when a device is detected"""
@@ -242,6 +243,7 @@ class BLEScanner:
                     # Avoid duplicates
                     if not any(d.address == device.address for d in matching_devices):
                         matching_devices.append(device)
+                        device_adv_data[device.address] = advertisement_data
                         self.log(f"Found: {device.name or 'Unknown'} ({device.address})")
         
         try:
@@ -268,8 +270,62 @@ class BLEScanner:
                 
             self.log(f"\nFound {len(matching_devices)} device(s) with UUID {uuid_hex}")
             
+            # Display detailed advertisement data for each device
+            for device in matching_devices:
+                adv_data = device_adv_data.get(device.address)
+                if adv_data:
+                    self.log(f"\n{'=' * 80}")
+                    self.log(f"Device: {device.name or 'Unknown'}")
+                    self.log(f"Address: {device.address}")
+                    self.log(f"\nAdvertisement Data:")
+                    
+                    # Local name
+                    if adv_data.local_name:
+                        self.log(f"    Local Name: {adv_data.local_name}")
+                    
+                    # RSSI
+                    if adv_data.rssi is not None:
+                        self.log(f"    RSSI: {adv_data.rssi} dBm")
+                    
+                    # TX Power
+                    if adv_data.tx_power is not None:
+                        self.log(f"    TX Power: {adv_data.tx_power} dBm")
+                    
+                    # Service UUIDs
+                    if adv_data.service_uuids:
+                        self.log(f"    Service UUIDs ({len(adv_data.service_uuids)}):")
+                        for uuid in adv_data.service_uuids:
+                            self.log(f"        - {uuid}")
+                    
+                    # Service Data
+                    if adv_data.service_data:
+                        self.log(f"    Service Data ({len(adv_data.service_data)} entries):")
+                        for uuid, data in adv_data.service_data.items():
+                            hex_data = " ".join(f"{b:02x}" for b in data)
+                            self.log(f"        {uuid}: {hex_data}")
+                    
+                    # Manufacturer Data
+                    if adv_data.manufacturer_data:
+                        self.log(f"    Manufacturer Data ({len(adv_data.manufacturer_data)} entries):")
+                        for company_id, data in adv_data.manufacturer_data.items():
+                            hex_data = " ".join(f"{b:02x}" for b in data)
+                            self.log(f"        Company ID 0x{company_id:04x}: {hex_data}")
+                    
+                    # Platform specific data
+                    if hasattr(adv_data, 'platform_data'):
+                        platform_data = adv_data.platform_data
+                        
+                        # Appearance (if available)
+                        if hasattr(platform_data, 'appearance') and platform_data.appearance is not None:
+                            self.log(f"    Appearance: 0x{platform_data.appearance:04x}")
+                        
+                        # Flags (if available)
+                        if hasattr(platform_data, 'flags') and platform_data.flags is not None:
+                            self.log(f"    Flags: 0x{platform_data.flags:02x}")
+            
             # Connect to first matching device
             device = matching_devices[0]
+            self.log(f"\n{'=' * 80}")
             self.log(f"\nConnecting to: {device.name or 'Unknown'} ({device.address})")
             self.update_status(f"Connecting to {device.address}...", "green")
             
