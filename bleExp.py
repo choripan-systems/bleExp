@@ -1,0 +1,622 @@
+import tkinter as tk
+from tkinter import ttk, scrolledtext, messagebox
+import asyncio
+import threading
+from bleak import BleakScanner, BleakClient
+from typing import Optional
+
+class BLEScanner:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("BLE Device Scanner")
+        self.root.geometry("900x900")
+        
+        self.client: Optional[BleakClient] = None
+        self.scanning = False
+        self.writable_chars = {}  # Store writable characteristics
+        self.notifiable_chars = {}  # Store notifiable/indicatable characteristics
+        self.active_notifications = {}  # Track active notifications
+        self.loop = None  # Store the event loop
+        
+        # Create UI
+        self.create_widgets()
+        
+    def create_widgets(self):
+        # Top frame for UUID input and scan button
+        top_frame = ttk.Frame(self.root, padding="10")
+        top_frame.pack(fill=tk.X)
+        
+        ttk.Label(top_frame, text="16-bit Service UUID (hex):").pack(side=tk.LEFT, padx=5)
+        self.uuid_entry = ttk.Entry(top_frame, width=20)
+        self.uuid_entry.insert(0, "180D")  # Default: Heart Rate Service
+        self.uuid_entry.pack(side=tk.LEFT, padx=5)
+        
+        ttk.Label(top_frame, text="Scan Duration (sec):").pack(side=tk.LEFT, padx=(20, 5))
+        self.scan_duration_entry = ttk.Entry(top_frame, width=8)
+        self.scan_duration_entry.insert(0, "5")
+        self.scan_duration_entry.pack(side=tk.LEFT, padx=5)
+        
+        self.scan_btn = ttk.Button(top_frame, text="Start Scan", command=self.toggle_scan)
+        self.scan_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.status_label = ttk.Label(top_frame, text="Ready", foreground="blue")
+        self.status_label.pack(side=tk.LEFT, padx=20)
+        
+        # Separator
+        ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
+        
+        # Main output area
+        output_frame = ttk.Frame(self.root, padding="10")
+        output_frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(output_frame, text="Scan Results:").pack(anchor=tk.W)
+        
+        self.output_text = scrolledtext.ScrolledText(
+            output_frame, 
+            wrap=tk.WORD, 
+            width=80, 
+            height=25,
+            font=("Consolas", 9)
+        )
+        self.output_text.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        # Bottom frame for disconnect button
+        bottom_frame = ttk.Frame(self.root, padding="10")
+        bottom_frame.pack(fill=tk.X)
+        
+        self.disconnect_btn = ttk.Button(
+            bottom_frame, 
+            text="Disconnect", 
+            command=self.disconnect_device,
+            state=tk.DISABLED
+        )
+        self.disconnect_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Write characteristic frame
+        write_frame = ttk.LabelFrame(self.root, text="Write to Characteristic", padding="10")
+        write_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # Characteristic UUID
+        ttk.Label(write_frame, text="Char UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        self.write_uuid_entry = ttk.Entry(write_frame, width=40)
+        self.write_uuid_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
+        
+        # Value type selection
+        ttk.Label(write_frame, text="Value Type:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        type_frame = ttk.Frame(write_frame)
+        type_frame.grid(row=1, column=1, sticky=tk.W, padx=5, pady=2)
+        
+        self.value_type = tk.StringVar(value="hex")
+        ttk.Radiobutton(type_frame, text="Hex", variable=self.value_type, value="hex").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(type_frame, text="Decimal", variable=self.value_type, value="dec").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(type_frame, text="UTF-8 String", variable=self.value_type, value="string").pack(side=tk.LEFT, padx=5)
+        
+        # Value input
+        ttk.Label(write_frame, text="Value:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
+        self.write_value_entry = ttk.Entry(write_frame, width=40)
+        self.write_value_entry.grid(row=2, column=1, sticky=tk.EW, padx=5, pady=2)
+        
+        # Write button
+        self.write_btn = ttk.Button(
+            write_frame, 
+            text="Write Value", 
+            command=self.write_characteristic,
+            state=tk.DISABLED
+        )
+        self.write_btn.grid(row=3, column=1, sticky=tk.E, padx=5, pady=5)
+        
+        # Configure grid weights
+        write_frame.columnconfigure(1, weight=1)
+        
+        # Notification/Indication frame
+        notify_frame = ttk.LabelFrame(self.root, text="Notifications/Indications", padding="10")
+        notify_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # Characteristic UUID for notifications
+        ttk.Label(notify_frame, text="Char UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        self.notify_uuid_entry = ttk.Entry(notify_frame, width=40)
+        self.notify_uuid_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
+        
+        # Notification buttons
+        button_frame = ttk.Frame(notify_frame)
+        button_frame.grid(row=1, column=1, sticky=tk.E, padx=5, pady=5)
+        
+        self.notify_enable_btn = ttk.Button(
+            button_frame, 
+            text="Enable Notifications", 
+            command=self.enable_notifications,
+            state=tk.DISABLED
+        )
+        self.notify_enable_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.notify_disable_btn = ttk.Button(
+            button_frame, 
+            text="Disable Notifications", 
+            command=self.disable_notifications,
+            state=tk.DISABLED
+        )
+        self.notify_disable_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Configure grid weights
+        notify_frame.columnconfigure(1, weight=1)
+        
+    def log(self, message):
+        """Thread-safe logging to the text widget"""
+        self.root.after(0, self._log_impl, message)
+        
+    def _log_impl(self, message):
+        self.output_text.insert(tk.END, message + "\n")
+        self.output_text.see(tk.END)
+        
+    def update_status(self, message, color="blue"):
+        """Update status label"""
+        self.root.after(0, lambda: self.status_label.config(text=message, foreground=color))
+        
+    def _enable_write_button(self):
+        """Enable the write button (must be called from main thread)"""
+        self.write_btn.config(state=tk.NORMAL)
+        
+    def _enable_notify_buttons(self):
+        """Enable the notification buttons (must be called from main thread)"""
+        self.notify_enable_btn.config(state=tk.NORMAL)
+        self.notify_disable_btn.config(state=tk.NORMAL)
+        
+    def toggle_scan(self):
+        if not self.scanning:
+            self.start_scan()
+        else:
+            self.stop_scan()
+            
+    def start_scan(self):
+        uuid_hex = self.uuid_entry.get().strip()
+        if not uuid_hex:
+            messagebox.showerror("Error", "Please enter a UUID")
+            return
+            
+        # Validate hex input
+        try:
+            int(uuid_hex, 16)
+        except ValueError:
+            messagebox.showerror("Error", "Invalid hex UUID")
+            return
+        
+        # Validate scan duration
+        try:
+            duration = float(self.scan_duration_entry.get().strip())
+            if duration <= 0:
+                messagebox.showerror("Error", "Scan duration must be positive")
+                return
+        except ValueError:
+            messagebox.showerror("Error", "Invalid scan duration")
+            return
+            
+        self.scanning = True
+        self.scan_btn.config(text="Stop Scan")
+        self.uuid_entry.config(state=tk.DISABLED)
+        self.scan_duration_entry.config(state=tk.DISABLED)
+        self.output_text.delete(1.0, tk.END)
+        
+        # Run scan in separate thread
+        thread = threading.Thread(target=self.run_scan, args=(uuid_hex, duration), daemon=True)
+        thread.start()
+        
+    def stop_scan(self):
+        self.scanning = False
+        self.scan_btn.config(text="Start Scan")
+        self.uuid_entry.config(state=tk.NORMAL)
+        self.scan_duration_entry.config(state=tk.NORMAL)
+        self.update_status("Scan stopped", "orange")
+        
+    def run_scan(self, uuid_hex, duration):
+        """Run the BLE scan in an asyncio event loop"""
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        try:
+            self.loop.run_until_complete(self.scan_for_devices(uuid_hex, duration))
+        except Exception as e:
+            self.log(f"Error: {str(e)}")
+            self.update_status(f"Error: {str(e)}", "red")
+        finally:
+            self.loop.close()
+            self.loop = None
+            
+    async def scan_for_devices(self, uuid_hex, duration):
+        """Scan for BLE devices with the specified UUID"""
+        # Convert 16-bit UUID to full 128-bit UUID
+        full_uuid = f"0000{uuid_hex.lower()}-0000-1000-8000-00805f9b34fb"
+        
+        self.log(f"Scanning for devices advertising UUID: {uuid_hex}")
+        self.log(f"Full UUID: {full_uuid}")
+        self.log(f"Scan duration: {duration} seconds")
+        self.log("-" * 80)
+        self.update_status("Scanning...", "green")
+        
+        matching_devices = []
+        
+        def detection_callback(device, advertisement_data):
+            """Called when a device is detected"""
+            # Check if the UUID is in the advertised service UUIDs
+            if advertisement_data.service_uuids:
+                adv_uuids = [u.lower() for u in advertisement_data.service_uuids]
+                if full_uuid in adv_uuids:
+                    # Avoid duplicates
+                    if not any(d.address == device.address for d in matching_devices):
+                        matching_devices.append(device)
+                        self.log(f"Found: {device.name or 'Unknown'} ({device.address})")
+        
+        try:
+            # Create scanner with callback
+            scanner = BleakScanner(detection_callback=detection_callback)
+            
+            # Start scanning
+            await scanner.start()
+            await asyncio.sleep(duration)
+            await scanner.stop()
+            
+            if not self.scanning:
+                return
+            
+            if not matching_devices:
+                self.log(f"\nNo devices found advertising UUID {uuid_hex}")
+                self.log("Note: The device must be actively advertising this service UUID")
+                self.update_status("No matching devices found", "orange")
+                self.scanning = False
+                self.root.after(0, lambda: self.scan_btn.config(text="Start Scan"))
+                self.root.after(0, lambda: self.uuid_entry.config(state=tk.NORMAL))
+                self.root.after(0, lambda: self.scan_duration_entry.config(state=tk.NORMAL))
+                return
+                
+            self.log(f"\nFound {len(matching_devices)} device(s) with UUID {uuid_hex}")
+            
+            # Connect to first matching device
+            device = matching_devices[0]
+            self.log(f"\nConnecting to: {device.name or 'Unknown'} ({device.address})")
+            self.update_status(f"Connecting to {device.address}...", "green")
+            
+            await self.connect_and_explore(device)
+            
+        except Exception as e:
+            self.log(f"\nScan error: {str(e)}")
+            self.update_status(f"Error: {str(e)}", "red")
+        finally:
+            self.scanning = False
+            self.root.after(0, lambda: self.scan_btn.config(text="Start Scan"))
+            self.root.after(0, lambda: self.uuid_entry.config(state=tk.NORMAL))
+            self.root.after(0, lambda: self.scan_duration_entry.config(state=tk.NORMAL))
+            
+    async def connect_and_explore(self, device):
+        """Connect to device and read all services/characteristics"""
+        try:
+            self.client = BleakClient(device.address)
+            await self.client.connect()
+            
+            self.root.after(0, lambda: self.disconnect_btn.config(state=tk.NORMAL))
+            
+            if not self.client.is_connected:
+                self.log("Failed to connect")
+                return
+                
+            self.log("Connected successfully!\n")
+            self.update_status("Connected - Reading services...", "green")
+            
+            # Get all services
+            services = self.client.services
+            service_list = list(services)
+            # Sort services by UUID
+            service_list.sort(key=lambda s: s.uuid)
+            self.log(f"Device has {len(service_list)} service(s):\n")
+            self.log("=" * 80)
+            
+            self.writable_chars.clear()
+            self.notifiable_chars.clear()
+            
+            for service in service_list:
+                self.log(f"\nService: {service.uuid}")
+                self.log(f"    Description: {service.description}")
+                self.log(f"    Characteristics: {len(service.characteristics)}")
+                
+                # Sort characteristics by UUID
+                char_list = sorted(service.characteristics, key=lambda c: c.uuid)
+                
+                for char in char_list:
+                    self.log(f"\n    Characteristic: {char.uuid}")
+                    self.log(f"        Description: {char.description}")
+                    self.log(f"        Properties: {', '.join(char.properties)}")
+                    
+                    # Store writable characteristics
+                    if "write" in char.properties or "write-without-response" in char.properties:
+                        self.writable_chars[char.uuid] = char
+                    
+                    # Store notifiable/indicatable characteristics
+                    if "notify" in char.properties or "indicate" in char.properties:
+                        self.notifiable_chars[char.uuid] = char
+                    
+                    # Read characteristic if readable
+                    if "read" in char.properties:
+                        try:
+                            value = await self.client.read_gatt_char(char.uuid)
+                            # Format value as hex
+                            hex_value = " ".join(f"{b:02x}" for b in value)
+                            self.log(f"        Value (hex): {hex_value}")
+                            # Try to decode as string
+                            try:
+                                str_value = value.decode('utf-8', errors='ignore')
+                                if str_value.isprintable():
+                                    self.log(f"        Value (string): {str_value}")
+                            except:
+                                pass
+                        except Exception as e:
+                            self.log(f"        Read error: {str(e)}")
+                    
+                    # List descriptors
+                    if char.descriptors:
+                        self.log(f"        Descriptors: {len(char.descriptors)}")
+                        for desc in char.descriptors:
+                            self.log(f"            - {desc.uuid}")
+                            
+            self.log("\n" + "=" * 80)
+            self.log("\nExploration complete!")
+            
+            if self.writable_chars:
+                self.log(f"\nFound {len(self.writable_chars)} writable characteristic(s)")
+                self.root.after(0, self._enable_write_button)
+            
+            if self.notifiable_chars:
+                self.log(f"Found {len(self.notifiable_chars)} notifiable/indicatable characteristic(s)")
+                self.root.after(0, self._enable_notify_buttons)
+            
+            self.update_status("Connected and ready", "blue")
+            
+            # Keep the loop running for write operations
+            while self.client and self.client.is_connected:
+                await asyncio.sleep(0.1)
+            
+        except Exception as e:
+            self.log(f"\nConnection error: {str(e)}")
+            self.update_status(f"Error: {str(e)}", "red")
+            if self.client and self.client.is_connected:
+                await self.client.disconnect()
+            self.client = None
+            self.writable_chars.clear()
+            self.notifiable_chars.clear()
+            self.active_notifications.clear()
+            self.root.after(0, lambda: self.disconnect_btn.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.write_btn.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.notify_enable_btn.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.notify_disable_btn.config(state=tk.DISABLED))
+            
+    def disconnect_device(self):
+        """Disconnect from the current device"""
+        if self.client:
+            thread = threading.Thread(target=self.run_disconnect, daemon=True)
+            thread.start()
+            
+    def run_disconnect(self):
+        """Run disconnect in asyncio loop"""
+        if self.loop and self.loop.is_running():
+            asyncio.run_coroutine_threadsafe(self.async_disconnect(), self.loop)
+        else:
+            # Fallback if loop is not available
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(self.async_disconnect())
+            finally:
+                loop.close()
+            
+    async def async_disconnect(self):
+        """Disconnect from device"""
+        try:
+            if self.client and self.client.is_connected:
+                await self.client.disconnect()
+                self.log("\nDisconnected")
+        except Exception as e:
+            self.log(f"\nDisconnect error: {str(e)}")
+        finally:
+            self.client = None
+            self.writable_chars.clear()
+            self.notifiable_chars.clear()
+            self.active_notifications.clear()
+            self.update_status("Disconnected", "orange")
+            self.root.after(0, lambda: self.disconnect_btn.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.write_btn.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.notify_enable_btn.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.notify_disable_btn.config(state=tk.DISABLED))
+            
+    def write_characteristic(self):
+        """Write a value to a characteristic"""
+        if not self.client:
+            messagebox.showerror("Error", "Not connected to a device")
+            return
+            
+        uuid = self.write_uuid_entry.get().strip()
+        if not uuid:
+            messagebox.showerror("Error", "Please enter a characteristic UUID")
+            return
+            
+        value_str = self.write_value_entry.get().strip()
+        if not value_str:
+            messagebox.showerror("Error", "Please enter a value to write")
+            return
+        
+        # Schedule the write operation in the same event loop
+        if self.loop and self.loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                self.write_value(uuid, value_str, self.value_type.get()),
+                self.loop
+            )
+        else:
+            messagebox.showerror("Error", "Event loop not available")
+    
+    def run_write(self, uuid, value_str, value_type):
+        """Deprecated - no longer used"""
+        pass
+            
+    async def write_value(self, uuid, value_str, value_type):
+        """Write a value to a characteristic"""
+        try:
+            # Convert UUID to lowercase for comparison
+            uuid_lower = uuid.lower()
+            
+            # Check if this is a writable characteristic
+            if uuid_lower not in self.writable_chars:
+                self.log(f"\nError: Characteristic {uuid} is not writable or not found")
+                return
+                
+            # Parse the value based on type
+            if value_type == "hex":
+                # Parse hex string (e.g., "01 02 03" or "010203")
+                hex_str = value_str.replace(" ", "").replace("0x", "")
+                if len(hex_str) % 2 != 0:
+                    self.log("\nError: Hex string must have even number of characters")
+                    return
+                try:
+                    data = bytes.fromhex(hex_str)
+                except ValueError as e:
+                    self.log(f"\nError: Invalid hex string: {e}")
+                    return
+                    
+            elif value_type == "dec":
+                # Parse decimal values (comma or space separated)
+                try:
+                    values = [int(v.strip()) for v in value_str.replace(",", " ").split()]
+                    if any(v < 0 or v > 255 for v in values):
+                        self.log("\nError: Decimal values must be between 0 and 255")
+                        return
+                    data = bytes(values)
+                except ValueError as e:
+                    self.log(f"\nError: Invalid decimal values: {e}")
+                    return
+                    
+            elif value_type == "string":
+                # Encode string as UTF-8
+                data = value_str.encode('utf-8')
+            else:
+                self.log(f"\nError: Unknown value type: {value_type}")
+                return
+                
+            # Write to characteristic
+            self.log(f"\nWriting to characteristic {uuid}...")
+            self.log(f"  Value type: {value_type}")
+            self.log(f"  Bytes: {' '.join(f'{b:02x}' for b in data)}")
+            self.update_status("Writing...", "green")
+            
+            await self.client.write_gatt_char(uuid_lower, data)
+            
+            self.log("Write successful!")
+            self.update_status("Write complete", "blue")
+            
+        except Exception as e:
+            self.log(f"\nWrite failed: {str(e)}")
+            self.update_status(f"Write failed: {str(e)}", "red")
+            
+    def enable_notifications(self):
+        """Enable notifications/indications for a characteristic"""
+        if not self.client:
+            messagebox.showerror("Error", "Not connected to a device")
+            return
+            
+        uuid = self.notify_uuid_entry.get().strip()
+        if not uuid:
+            messagebox.showerror("Error", "Please enter a characteristic UUID")
+            return
+        
+        # Schedule the enable operation in the same event loop
+        if self.loop and self.loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                self.start_notify(uuid),
+                self.loop
+            )
+        else:
+            messagebox.showerror("Error", "Event loop not available")
+            
+    def disable_notifications(self):
+        """Disable notifications/indications for a characteristic"""
+        if not self.client:
+            messagebox.showerror("Error", "Not connected to a device")
+            return
+            
+        uuid = self.notify_uuid_entry.get().strip()
+        if not uuid:
+            messagebox.showerror("Error", "Please enter a characteristic UUID")
+            return
+        
+        # Schedule the disable operation in the same event loop
+        if self.loop and self.loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                self.stop_notify(uuid),
+                self.loop
+            )
+        else:
+            messagebox.showerror("Error", "Event loop not available")
+            
+    async def start_notify(self, uuid):
+        """Start notifications/indications for a characteristic"""
+        try:
+            # Convert UUID to lowercase for comparison
+            uuid_lower = uuid.lower()
+            
+            # Check if this characteristic supports notifications/indications
+            if uuid_lower not in self.notifiable_chars:
+                self.log(f"\nError: Characteristic {uuid} does not support notifications/indications")
+                return
+            
+            # Check if already subscribed
+            if uuid_lower in self.active_notifications:
+                self.log(f"\nNotifications already enabled for {uuid}")
+                return
+            
+            # Define notification callback
+            def notification_handler(sender, data):
+                hex_value = " ".join(f"{b:02x}" for b in data)
+                timestamp = asyncio.get_event_loop().time()
+                self.log(f"[NOTIFY] {uuid}: {hex_value}")
+                # Try to decode as string
+                try:
+                    str_value = data.decode('utf-8', errors='ignore')
+                    if str_value.isprintable():
+                        self.log(f"         String: {str_value}")
+                except:
+                    pass
+            
+            # Start notifications
+            self.log(f"\nEnabling notifications for {uuid}...")
+            await self.client.start_notify(uuid_lower, notification_handler)
+            self.active_notifications[uuid_lower] = True
+            self.log("Notifications enabled!")
+            self.update_status("Notifications enabled", "blue")
+            
+        except Exception as e:
+            self.log(f"\nFailed to enable notifications: {str(e)}")
+            self.update_status(f"Notification error: {str(e)}", "red")
+            
+    async def stop_notify(self, uuid):
+        """Stop notifications/indications for a characteristic"""
+        try:
+            # Convert UUID to lowercase for comparison
+            uuid_lower = uuid.lower()
+            
+            # Check if notifications are active
+            if uuid_lower not in self.active_notifications:
+                self.log(f"\nNo active notifications for {uuid}")
+                return
+            
+            # Stop notifications
+            self.log(f"\nDisabling notifications for {uuid}...")
+            await self.client.stop_notify(uuid_lower)
+            del self.active_notifications[uuid_lower]
+            self.log("Notifications disabled!")
+            self.update_status("Notifications disabled", "blue")
+            
+        except Exception as e:
+            self.log(f"\nFailed to disable notifications: {str(e)}")
+            self.update_status(f"Notification error: {str(e)}", "red")
+            
+def main():
+    root = tk.Tk()
+    app = BLEScanner(root)
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
+
