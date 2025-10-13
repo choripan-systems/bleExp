@@ -1,8 +1,12 @@
 # Intro
 
-**bleExp** is a simple Bluetooth Low Energy explorer app. It lets the user discover BLE devices that advertise the specified service UUID, connect to it, and list all its services, characteristics, and descriptors.  The app automatically reads the value of all the readable characteristics, and lets the user write an arbitrary value to any of the writeable characteristics. The app also lets the user enable or disable notifications/indications on any charactersitic that supports them, and the notifications/indications received from the BLE device are shown on the app's output log.
+**bleExp** is a simple Bluetooth Low Energy explorer app. It lets the user discover BLE devices that advertise the specified service UUID, connect to the device, and list all its services, characteristics, and descriptors.  
 
-The image below shows the **bleExp** app connected to a Wahoo TICKR Heart Rate sensor:
+The app automatically reads the value of all the readable characteristics, and lets the user write an arbitrary value to any of the writeable characteristics. The value to be written can be specified in hex, decimal, or UTF-8 string. 
+
+The app also lets the user enable or disable notifications/indications on any charactersitic that supports them, and the notifications/indications received from the BLE device are shown on the app's output log.
+
+The image below shows the **bleExp** app connected to a Wahoo TICKR Heart Rate sensor that supports the BLE SIG [Heart Rate Service](https://www.bluetooth.com/specifications/specs/html/?src=HRS_v1.0/out/en/index-en.html), with UUID 0x180D:
 
 ![bleExp app connected to a Wahoo TICKR HRM device](./assets/bleExp-Wahoo-TICKR.png)
 
