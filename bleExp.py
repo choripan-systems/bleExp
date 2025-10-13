@@ -9,7 +9,7 @@ class BLEScanner:
     def __init__(self, root):
         self.root = root
         self.root.title("BLE Device Scanner")
-        self.root.geometry("1000x1200")
+        self.root.geometry("1000x1100")
         
         self.client: Optional[BleakClient] = None
         self.scanning = False
@@ -329,8 +329,9 @@ class BLEScanner:
                 self.root.after(0, lambda: self.scan_duration_entry.config(state=tk.NORMAL))
                 return
             
-            # Store discovered devices
+            # Store discovered devices and advertisement data
             self.discovered_devices = matching_devices
+            self.device_adv_data = device_adv_data
             
             self.log(f"\nFound {len(matching_devices)} device(s) with UUID {uuid_input}\n")
             
@@ -526,10 +527,10 @@ class BLEScanner:
                             self.log(f"        Read error: {str(e)}")
                     
                     # List descriptors
-                    if char.descriptors:
-                        self.log(f"        Descriptors: {len(char.descriptors)}")
-                        for desc in char.descriptors:
-                            self.log(f"            - {desc.uuid}")
+                    #if char.descriptors:
+                    #    self.log(f"        Descriptors: {len(char.descriptors)}")
+                    #    for desc in char.descriptors:
+                    #        self.log(f"            - {desc.uuid}")
                             
             self.log("\n" + "=" * 80)
             self.log("\nExploration complete!")
