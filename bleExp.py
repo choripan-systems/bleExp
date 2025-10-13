@@ -9,7 +9,7 @@ class BLEScanner:
     def __init__(self, root):
         self.root = root
         self.root.title("BLE Device Scanner")
-        self.root.geometry("900x900")
+        self.root.geometry("1000x1200")
         
         self.client: Optional[BleakClient] = None
         self.scanning = False
@@ -17,6 +17,8 @@ class BLEScanner:
         self.notifiable_chars = {}  # Store notifiable/indicatable characteristics
         self.active_notifications = {}  # Track active notifications
         self.loop = None  # Store the event loop
+        self.discovered_devices = []  # Store discovered devices
+        self.device_adv_data = {}  # Store advertisement data
         
         # Create UI
         self.create_widgets()
@@ -45,17 +47,59 @@ class BLEScanner:
         # Separator
         ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
         
+        # Device list frame
+        device_frame = ttk.LabelFrame(self.root, text="Discovered Devices", padding="10")
+        device_frame.pack(fill=tk.BOTH, expand=False, padx=10, pady=5)
+        
+        # Create listbox with scrollbar
+        list_container = ttk.Frame(device_frame)
+        list_container.pack(fill=tk.BOTH, expand=True)
+        
+        scrollbar = ttk.Scrollbar(list_container, orient=tk.VERTICAL)
+        self.device_listbox = tk.Listbox(
+            list_container,
+            height=6,
+            font=("Consolas", 9),
+            yscrollcommand=scrollbar.set
+        )
+        scrollbar.config(command=self.device_listbox.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.device_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Connect button for selected device
+        button_frame = ttk.Frame(device_frame)
+        button_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        self.connect_btn = ttk.Button(
+            button_frame,
+            text="Connect to Selected Device",
+            command=self.connect_to_selected,
+            state=tk.DISABLED
+        )
+        self.connect_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.show_adv_btn = ttk.Button(
+            button_frame,
+            text="Show Advertisement Data",
+            command=self.show_advertisement_data,
+            state=tk.DISABLED
+        )
+        self.show_adv_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Separator
+        ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
+        
         # Main output area
         output_frame = ttk.Frame(self.root, padding="10")
         output_frame.pack(fill=tk.BOTH, expand=True)
         
-        ttk.Label(output_frame, text="Scan Results:").pack(anchor=tk.W)
+        ttk.Label(output_frame, text="Device Information:").pack(anchor=tk.W)
         
         self.output_text = scrolledtext.ScrolledText(
             output_frame, 
             wrap=tk.WORD, 
-            width=80, 
-            height=25,
+            width=100, 
+            height=20,
             font=("Consolas", 9)
         )
         self.output_text.pack(fill=tk.BOTH, expand=True, pady=5)
@@ -284,69 +328,15 @@ class BLEScanner:
                 self.root.after(0, lambda: self.uuid_entry.config(state=tk.NORMAL))
                 self.root.after(0, lambda: self.scan_duration_entry.config(state=tk.NORMAL))
                 return
-                
-            self.log(f"\nFound {len(matching_devices)} device(s) with UUID {uuid_input}")
             
-            # Display detailed advertisement data for each device
-            for device in matching_devices:
-                adv_data = device_adv_data.get(device.address)
-                if adv_data:
-                    self.log(f"\n{'=' * 80}")
-                    self.log(f"Device: {device.name or 'Unknown'}")
-                    self.log(f"Address: {device.address}")
-                    self.log(f"\nAdvertisement Data:")
-                    
-                    # Local name
-                    if adv_data.local_name:
-                        self.log(f"    Local Name: {adv_data.local_name}")
-                    
-                    # RSSI
-                    if adv_data.rssi is not None:
-                        self.log(f"    RSSI: {adv_data.rssi} dBm")
-                    
-                    # TX Power
-                    if adv_data.tx_power is not None:
-                        self.log(f"    TX Power: {adv_data.tx_power} dBm")
-                    
-                    # Service UUIDs
-                    if adv_data.service_uuids:
-                        self.log(f"    Service UUIDs ({len(adv_data.service_uuids)}):")
-                        for uuid in adv_data.service_uuids:
-                            self.log(f"        - {uuid}")
-                    
-                    # Service Data
-                    if adv_data.service_data:
-                        self.log(f"    Service Data ({len(adv_data.service_data)} entries):")
-                        for uuid, data in adv_data.service_data.items():
-                            hex_data = " ".join(f"{b:02x}" for b in data)
-                            self.log(f"        {uuid}: {hex_data}")
-                    
-                    # Manufacturer Data
-                    if adv_data.manufacturer_data:
-                        self.log(f"    Manufacturer Data ({len(adv_data.manufacturer_data)} entries):")
-                        for company_id, data in adv_data.manufacturer_data.items():
-                            hex_data = " ".join(f"{b:02x}" for b in data)
-                            self.log(f"        Company ID 0x{company_id:04x}: {hex_data}")
-                    
-                    # Platform specific data
-                    if hasattr(adv_data, 'platform_data'):
-                        platform_data = adv_data.platform_data
-                        
-                        # Appearance (if available)
-                        if hasattr(platform_data, 'appearance') and platform_data.appearance is not None:
-                            self.log(f"    Appearance: 0x{platform_data.appearance:04x}")
-                        
-                        # Flags (if available)
-                        if hasattr(platform_data, 'flags') and platform_data.flags is not None:
-                            self.log(f"    Flags: 0x{platform_data.flags:02x}")
+            # Store discovered devices
+            self.discovered_devices = matching_devices
             
-            # Connect to first matching device
-            device = matching_devices[0]
-            self.log(f"\n{'=' * 80}")
-            self.log(f"\nConnecting to: {device.name or 'Unknown'} ({device.address})")
-            self.update_status(f"Connecting to {device.address}...", "green")
+            self.log(f"\nFound {len(matching_devices)} device(s) with UUID {uuid_input}\n")
             
-            await self.connect_and_explore(device)
+            # Populate device list
+            self.root.after(0, self._populate_device_list)
+            self.update_status(f"Found {len(matching_devices)} device(s) - Select one to connect", "blue")
             
         except Exception as e:
             self.log(f"\nScan error: {str(e)}")
@@ -356,6 +346,120 @@ class BLEScanner:
             self.root.after(0, lambda: self.scan_btn.config(text="Start Scan"))
             self.root.after(0, lambda: self.uuid_entry.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.scan_duration_entry.config(state=tk.NORMAL))
+            
+    def _populate_device_list(self):
+        """Populate the device listbox (must be called from main thread)"""
+        self.device_listbox.delete(0, tk.END)
+        for device in self.discovered_devices:
+            display_name = f"{device.name or 'Unknown':30s} [{device.address}]"
+            self.device_listbox.insert(tk.END, display_name)
+        
+        if self.discovered_devices:
+            self.connect_btn.config(state=tk.NORMAL)
+            self.show_adv_btn.config(state=tk.NORMAL)
+            self.device_listbox.selection_set(0)  # Select first device by default
+            
+    def connect_to_selected(self):
+        """Connect to the device selected in the listbox"""
+        selection = self.device_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("No Selection", "Please select a device from the list")
+            return
+        
+        device_index = selection[0]
+        device = self.discovered_devices[device_index]
+        
+        self.output_text.delete(1.0, tk.END)
+        self.log(f"Connecting to: {device.name or 'Unknown'} ({device.address})")
+        self.update_status(f"Connecting to {device.address}...", "green")
+        
+        # Disable buttons during connection
+        self.connect_btn.config(state=tk.DISABLED)
+        self.show_adv_btn.config(state=tk.DISABLED)
+        
+        # Run connection in separate thread
+        thread = threading.Thread(target=self.run_connect, args=(device,), daemon=True)
+        thread.start()
+        
+    def run_connect(self, device):
+        """Run the connection in an asyncio event loop"""
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        try:
+            self.loop.run_until_complete(self.connect_and_explore(device))
+        except Exception as e:
+            self.log(f"Connection error: {str(e)}")
+            self.update_status(f"Error: {str(e)}", "red")
+        finally:
+            self.loop.close()
+            self.loop = None
+            
+    def show_advertisement_data(self):
+        """Show detailed advertisement data for selected device"""
+        selection = self.device_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("No Selection", "Please select a device from the list")
+            return
+        
+        device_index = selection[0]
+        device = self.discovered_devices[device_index]
+        adv_data = self.device_adv_data.get(device.address)
+        
+        self.output_text.delete(1.0, tk.END)
+        
+        if adv_data:
+            self.log(f"{'=' * 80}")
+            self.log(f"Device: {device.name or 'Unknown'}")
+            self.log(f"Address: {device.address}")
+            self.log(f"\nAdvertisement Data:")
+            
+            # Local name
+            if adv_data.local_name:
+                self.log(f"    Local Name: {adv_data.local_name}")
+            
+            # RSSI
+            if adv_data.rssi is not None:
+                self.log(f"    RSSI: {adv_data.rssi} dBm")
+            
+            # TX Power
+            if adv_data.tx_power is not None:
+                self.log(f"    TX Power: {adv_data.tx_power} dBm")
+            
+            # Service UUIDs
+            if adv_data.service_uuids:
+                self.log(f"    Service UUIDs ({len(adv_data.service_uuids)}):")
+                for uuid in adv_data.service_uuids:
+                    self.log(f"        - {uuid}")
+            
+            # Service Data
+            if adv_data.service_data:
+                self.log(f"    Service Data ({len(adv_data.service_data)} entries):")
+                for uuid, data in adv_data.service_data.items():
+                    hex_data = " ".join(f"{b:02x}" for b in data)
+                    self.log(f"        {uuid}: {hex_data}")
+            
+            # Manufacturer Data
+            if adv_data.manufacturer_data:
+                self.log(f"    Manufacturer Data ({len(adv_data.manufacturer_data)} entries):")
+                for company_id, data in adv_data.manufacturer_data.items():
+                    hex_data = " ".join(f"{b:02x}" for b in data)
+                    self.log(f"        Company ID 0x{company_id:04x}: {hex_data}")
+            
+            # Platform specific data
+            if hasattr(adv_data, 'platform_data'):
+                platform_data = adv_data.platform_data
+                
+                # Appearance (if available)
+                if hasattr(platform_data, 'appearance') and platform_data.appearance is not None:
+                    self.log(f"    Appearance: 0x{platform_data.appearance:04x}")
+                
+                # Flags (if available)
+                if hasattr(platform_data, 'flags') and platform_data.flags is not None:
+                    self.log(f"    Flags: 0x{platform_data.flags:02x}")
+            
+            self.log(f"{'=' * 80}")
+        else:
+            self.log("No advertisement data available for this device")
             
     async def connect_and_explore(self, device):
         """Connect to device and read all services/characteristics"""
