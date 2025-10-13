@@ -4,11 +4,12 @@ import asyncio
 import threading
 from bleak import BleakScanner, BleakClient
 from typing import Optional
+from datetime import datetime
 
 class BLEScanner:
     def __init__(self, root):
         self.root = root
-        self.root.title("BLE Device Scanner")
+        self.root.title("BLE Device Explorer")
         self.root.geometry("1000x1100")
         
         self.client: Optional[BleakClient] = None
@@ -747,13 +748,13 @@ class BLEScanner:
             # Define notification callback
             def notification_handler(sender, data):
                 hex_value = " ".join(f"{b:02x}" for b in data)
-                timestamp = asyncio.get_event_loop().time()
-                self.log(f"[NOTIFY] {uuid}: {hex_value}")
+                timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+                self.log(f"[{timestamp}] [NOTIFY] {uuid}: {hex_value}")
                 # Try to decode as string
                 try:
                     str_value = data.decode('utf-8', errors='ignore')
                     if str_value.isprintable():
-                        self.log(f"         String: {str_value}")
+                        self.log(f"{' ' * (len(timestamp) + 2)}         String: {str_value}")
                 except:
                     pass
             
