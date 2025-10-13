@@ -18,3 +18,6 @@ source venv/bin/activate
 pip install bleak
 python bleExp.py
 ```
+# Credits
+
+The code for this app was developed via an interactive session with the [Claude AI](https://www.claude.ai) assistant. It took only 10 back-and-forth's with the chatbot to come up with this working version.
