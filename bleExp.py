@@ -26,7 +26,7 @@ class BLEScanner:
         top_frame = ttk.Frame(self.root, padding="10")
         top_frame.pack(fill=tk.X)
         
-        ttk.Label(top_frame, text="16-bit Service UUID (hex):").pack(side=tk.LEFT, padx=5)
+        ttk.Label(top_frame, text="Service UUID:").pack(side=tk.LEFT, padx=5)
         self.uuid_entry = ttk.Entry(top_frame, width=20)
         self.uuid_entry.insert(0, "180D")  # Default: Heart Rate Service
         self.uuid_entry.pack(side=tk.LEFT, padx=5)
@@ -168,16 +168,27 @@ class BLEScanner:
             self.stop_scan()
             
     def start_scan(self):
-        uuid_hex = self.uuid_entry.get().strip()
-        if not uuid_hex:
+        uuid_input = self.uuid_entry.get().strip().replace("-", "").replace(" ", "")
+        if not uuid_input:
             messagebox.showerror("Error", "Please enter a UUID")
             return
             
         # Validate hex input
         try:
-            int(uuid_hex, 16)
+            int(uuid_input, 16)
         except ValueError:
             messagebox.showerror("Error", "Invalid hex UUID")
+            return
+        
+        # Determine if it's a 16-bit or 128-bit UUID
+        if len(uuid_input) == 4:
+            # 16-bit UUID
+            uuid_type = "16-bit"
+        elif len(uuid_input) == 32:
+            # 128-bit UUID (without dashes)
+            uuid_type = "128-bit"
+        else:
+            messagebox.showerror("Error", "UUID must be 4 hex digits (16-bit) or 32 hex digits (128-bit)")
             return
         
         # Validate scan duration
@@ -197,7 +208,7 @@ class BLEScanner:
         self.output_text.delete(1.0, tk.END)
         
         # Run scan in separate thread
-        thread = threading.Thread(target=self.run_scan, args=(uuid_hex, duration), daemon=True)
+        thread = threading.Thread(target=self.run_scan, args=(uuid_input, uuid_type, duration), daemon=True)
         thread.start()
         
     def stop_scan(self):
@@ -207,12 +218,12 @@ class BLEScanner:
         self.scan_duration_entry.config(state=tk.NORMAL)
         self.update_status("Scan stopped", "orange")
         
-    def run_scan(self, uuid_hex, duration):
+    def run_scan(self, uuid_input, uuid_type, duration):
         """Run the BLE scan in an asyncio event loop"""
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         try:
-            self.loop.run_until_complete(self.scan_for_devices(uuid_hex, duration))
+            self.loop.run_until_complete(self.scan_for_devices(uuid_input, uuid_type, duration))
         except Exception as e:
             self.log(f"Error: {str(e)}")
             self.update_status(f"Error: {str(e)}", "red")
@@ -220,12 +231,18 @@ class BLEScanner:
             self.loop.close()
             self.loop = None
             
-    async def scan_for_devices(self, uuid_hex, duration):
+    async def scan_for_devices(self, uuid_input, uuid_type, duration):
         """Scan for BLE devices with the specified UUID"""
-        # Convert 16-bit UUID to full 128-bit UUID
-        full_uuid = f"0000{uuid_hex.lower()}-0000-1000-8000-00805f9b34fb"
+        # Convert to full 128-bit UUID if needed
+        if uuid_type == "16-bit":
+            full_uuid = f"0000{uuid_input.lower()}-0000-1000-8000-00805f9b34fb"
+        else:
+            # Format 128-bit UUID with dashes
+            uuid_lower = uuid_input.lower()
+            full_uuid = f"{uuid_lower[0:8]}-{uuid_lower[8:12]}-{uuid_lower[12:16]}-{uuid_lower[16:20]}-{uuid_lower[20:32]}"
         
-        self.log(f"Scanning for devices advertising UUID: {uuid_hex}")
+        self.log(f"Scanning for devices advertising UUID: {uuid_input}")
+        self.log(f"UUID Type: {uuid_type}")
         self.log(f"Full UUID: {full_uuid}")
         self.log(f"Scan duration: {duration} seconds")
         self.log("-" * 80)
@@ -259,7 +276,7 @@ class BLEScanner:
                 return
             
             if not matching_devices:
-                self.log(f"\nNo devices found advertising UUID {uuid_hex}")
+                self.log(f"\nNo devices found advertising UUID {uuid_input}")
                 self.log("Note: The device must be actively advertising this service UUID")
                 self.update_status("No matching devices found", "orange")
                 self.scanning = False
@@ -268,7 +285,7 @@ class BLEScanner:
                 self.root.after(0, lambda: self.scan_duration_entry.config(state=tk.NORMAL))
                 return
                 
-            self.log(f"\nFound {len(matching_devices)} device(s) with UUID {uuid_hex}")
+            self.log(f"\nFound {len(matching_devices)} device(s) with UUID {uuid_input}")
             
             # Display detailed advertisement data for each device
             for device in matching_devices:
@@ -511,11 +528,11 @@ class BLEScanner:
     async def write_value(self, uuid, value_str, value_type):
         """Write a value to a characteristic"""
         try:
-            # Convert UUID to lowercase for comparison
-            uuid_lower = uuid.lower()
+            # Normalize UUID
+            uuid_normalized = self.normalize_uuid(uuid)
             
             # Check if this is a writable characteristic
-            if uuid_lower not in self.writable_chars:
+            if uuid_normalized not in self.writable_chars:
                 self.log(f"\nError: Characteristic {uuid} is not writable or not found")
                 return
                 
@@ -557,7 +574,7 @@ class BLEScanner:
             self.log(f"  Bytes: {' '.join(f'{b:02x}' for b in data)}")
             self.update_status("Writing...", "green")
             
-            await self.client.write_gatt_char(uuid_lower, data)
+            await self.client.write_gatt_char(uuid_normalized, data)
             
             self.log("Write successful!")
             self.update_status("Write complete", "blue")
@@ -609,16 +626,16 @@ class BLEScanner:
     async def start_notify(self, uuid):
         """Start notifications/indications for a characteristic"""
         try:
-            # Convert UUID to lowercase for comparison
-            uuid_lower = uuid.lower()
+            # Normalize UUID
+            uuid_normalized = self.normalize_uuid(uuid)
             
             # Check if this characteristic supports notifications/indications
-            if uuid_lower not in self.notifiable_chars:
+            if uuid_normalized not in self.notifiable_chars:
                 self.log(f"\nError: Characteristic {uuid} does not support notifications/indications")
                 return
             
             # Check if already subscribed
-            if uuid_lower in self.active_notifications:
+            if uuid_normalized in self.active_notifications:
                 self.log(f"\nNotifications already enabled for {uuid}")
                 return
             
@@ -637,8 +654,8 @@ class BLEScanner:
             
             # Start notifications
             self.log(f"\nEnabling notifications for {uuid}...")
-            await self.client.start_notify(uuid_lower, notification_handler)
-            self.active_notifications[uuid_lower] = True
+            await self.client.start_notify(uuid_normalized, notification_handler)
+            self.active_notifications[uuid_normalized] = True
             self.log("Notifications enabled!")
             self.update_status("Notifications enabled", "blue")
             
@@ -649,24 +666,40 @@ class BLEScanner:
     async def stop_notify(self, uuid):
         """Stop notifications/indications for a characteristic"""
         try:
-            # Convert UUID to lowercase for comparison
-            uuid_lower = uuid.lower()
+            # Normalize UUID
+            uuid_normalized = self.normalize_uuid(uuid)
             
             # Check if notifications are active
-            if uuid_lower not in self.active_notifications:
+            if uuid_normalized not in self.active_notifications:
                 self.log(f"\nNo active notifications for {uuid}")
                 return
             
             # Stop notifications
             self.log(f"\nDisabling notifications for {uuid}...")
-            await self.client.stop_notify(uuid_lower)
-            del self.active_notifications[uuid_lower]
+            await self.client.stop_notify(uuid_normalized)
+            del self.active_notifications[uuid_normalized]
             self.log("Notifications disabled!")
             self.update_status("Notifications disabled", "blue")
             
         except Exception as e:
             self.log(f"\nFailed to disable notifications: {str(e)}")
             self.update_status(f"Notification error: {str(e)}", "red")
+            
+    def normalize_uuid(self, uuid):
+        """Normalize UUID to full 128-bit format with lowercase"""
+        # Remove spaces and dashes
+        uuid_clean = uuid.replace("-", "").replace(" ", "").lower()
+        
+        # Check length
+        if len(uuid_clean) == 4:
+            # 16-bit UUID - convert to 128-bit
+            return f"0000{uuid_clean}-0000-1000-8000-00805f9b34fb"
+        elif len(uuid_clean) == 32:
+            # 128-bit UUID - format with dashes
+            return f"{uuid_clean[0:8]}-{uuid_clean[8:12]}-{uuid_clean[12:16]}-{uuid_clean[16:20]}-{uuid_clean[20:32]}"
+        else:
+            # Return as-is and let it fail with proper error message
+            return uuid.lower()
             
 def main():
     root = tk.Tk()
