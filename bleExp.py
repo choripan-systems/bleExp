@@ -15,6 +15,7 @@ class BLEScanner:
         
         self.client: Optional[BleakClient] = None
         self.scanning = False
+        self.readable_chars = {}  # Store readable characteristics
         self.writable_chars = {}  # Store writable characteristics
         self.notifiable_chars = {}  # Store notifiable/indicatable characteristics
         self.active_notifications = {}  # Track active notifications
@@ -119,6 +120,27 @@ class BLEScanner:
         )
         self.disconnect_btn.pack(side=tk.LEFT, padx=5)
         
+        # Read characteristic frame
+        read_frame = ttk.LabelFrame(self.root, text="Read Characteristic", padding="10")
+        read_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # Characteristic UUID for reading
+        ttk.Label(read_frame, text="Char UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        self.read_uuid_entry = ttk.Entry(read_frame, width=40)
+        self.read_uuid_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
+        
+        # Read button
+        self.read_btn = ttk.Button(
+            read_frame, 
+            text="Read Value", 
+            command=self.read_characteristic,
+            state=tk.DISABLED
+        )
+        self.read_btn.grid(row=1, column=1, sticky=tk.E, padx=5, pady=5)
+        
+        # Configure grid weights
+        read_frame.columnconfigure(1, weight=1)
+        
         # Write characteristic frame
         write_frame = ttk.LabelFrame(self.root, text="Write to Characteristic", padding="10")
         write_frame.pack(fill=tk.X, padx=10, pady=5)
@@ -198,6 +220,10 @@ class BLEScanner:
     def update_status(self, message, color="blue"):
         """Update status label"""
         self.root.after(0, lambda: self.status_label.config(text=message, foreground=color))
+        
+    def _enable_read_button(self):
+        """Enable the read button (must be called from main thread)"""
+        self.read_btn.config(state=tk.NORMAL)
         
     def _enable_write_button(self):
         """Enable the write button (must be called from main thread)"""
@@ -487,7 +513,8 @@ class BLEScanner:
             service_list.sort(key=lambda s: s.uuid)
             self.log(f"Device has {len(service_list)} service(s):\n")
             self.log("=" * 80)
-            
+
+            self.readable_chars.clear()            
             self.writable_chars.clear()
             self.notifiable_chars.clear()
             
@@ -504,6 +531,10 @@ class BLEScanner:
                     self.log(f"        Description: {char.description}")
                     self.log(f"        Properties: {', '.join(char.properties)}")
                     
+                    # Store readable characteristics
+                    if "read" in char.properties:
+                        self.readable_chars[char.uuid] = char
+                                            
                     # Store writable characteristics
                     if "write" in char.properties or "write-without-response" in char.properties:
                         self.writable_chars[char.uuid] = char
@@ -538,6 +569,10 @@ class BLEScanner:
             self.log("\n" + "=" * 80)
             self.log("\nExploration complete!")
             
+            if self.readable_chars:
+                self.log(f"Found {len(self.readable_chars)} readable characteristic(s)")
+                self.root.after(0, self._enable_read_button)
+                            
             if self.writable_chars:
                 self.log(f"\nFound {len(self.writable_chars)} writable characteristic(s)")
                 self.root.after(0, self._enable_write_button)
@@ -558,10 +593,12 @@ class BLEScanner:
             if self.client and self.client.is_connected:
                 await self.client.disconnect()
             self.client = None
+            self.readable_chars.clear()
             self.writable_chars.clear()
             self.notifiable_chars.clear()
             self.active_notifications.clear()
             self.root.after(0, lambda: self.disconnect_btn.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.read_btn.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.write_btn.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.notify_enable_btn.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.notify_disable_btn.config(state=tk.DISABLED))
@@ -595,14 +632,87 @@ class BLEScanner:
             self.log(f"\nDisconnect error: {str(e)}")
         finally:
             self.client = None
+            self.readable_chars.clear()
             self.writable_chars.clear()
             self.notifiable_chars.clear()
             self.active_notifications.clear()
             self.update_status("Disconnected", "orange")
             self.root.after(0, lambda: self.disconnect_btn.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.read_btn.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.write_btn.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.notify_enable_btn.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.notify_disable_btn.config(state=tk.DISABLED))
+
+    def read_characteristic(self):
+        """Manually read a characteristic value"""
+        if not self.client:
+            messagebox.showerror("Error", "Not connected to a device")
+            return
+            
+        uuid = self.read_uuid_entry.get().strip()
+        if not uuid:
+            messagebox.showerror("Error", "Please enter a characteristic UUID")
+            return
+        
+        # Schedule the read operation in the same event loop
+        if self.loop and self.loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                self.read_char_value(uuid),
+                self.loop
+            )
+        else:
+            messagebox.showerror("Error", "Event loop not available")
+            
+    async def read_char_value(self, uuid):
+        """Read a characteristic value"""
+        try:
+            # Normalize UUID
+            uuid_normalized = self.normalize_uuid(uuid)
+            
+            # Check if this characteristic supports reading
+            if uuid_normalized not in self.readable_chars:
+                self.log(f"\nError: Characteristic {uuid} does not support reading or not found")
+                return
+            
+            # Read the characteristic
+            self.log(f"\nReading characteristic {uuid}...")
+            self.update_status("Reading...", "green")
+            
+            value = await self.client.read_gatt_char(uuid_normalized)
+            
+            # Format value as hex
+            hex_value = " ".join(f"{b:02x}" for b in value)
+            self.log(f"  Value (hex): {hex_value}")
+            self.log(f"  Length: {len(value)} byte(s)")
+            
+            # Try to decode as string
+            try:
+                str_value = value.decode('utf-8', errors='ignore')
+                if str_value.isprintable():
+                    self.log(f"  Value (string): {str_value}")
+            except:
+                pass
+            
+            # Try to decode as integer (if 1, 2, or 4 bytes)
+            if len(value) == 1:
+                self.log(f"  Value (uint8): {value[0]}")
+            elif len(value) == 2:
+                uint16_le = int.from_bytes(value, byteorder='little')
+                uint16_be = int.from_bytes(value, byteorder='big')
+                self.log(f"  Value (uint16 LE): {uint16_le}")
+                self.log(f"  Value (uint16 BE): {uint16_be}")
+            elif len(value) == 4:
+                uint32_le = int.from_bytes(value, byteorder='little')
+                uint32_be = int.from_bytes(value, byteorder='big')
+                self.log(f"  Value (uint32 LE): {uint32_le}")
+                self.log(f"  Value (uint32 BE): {uint32_be}")
+            
+            self.log("Read successful!")
+            self.update_status("Read complete", "blue")
+            
+        except Exception as e:
+            self.log(f"\nRead failed: {str(e)}")
+            self.update_status(f"Read failed: {str(e)}", "red")
             
     def write_characteristic(self):
         """Write a value to a characteristic"""
