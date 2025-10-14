@@ -5,9 +5,10 @@ import threading
 from bleak import BleakScanner, BleakClient
 from typing import Optional
 from datetime import datetime
+import argparse
 
 class BLEScanner:
-    def __init__(self, root):
+    def __init__(self, root, default_uuid="180D"):
         self.root = root
         self.root.title("BLE Device Explorer")
         self.root.geometry("1000x1100")
@@ -20,6 +21,7 @@ class BLEScanner:
         self.loop = None  # Store the event loop
         self.discovered_devices = []  # Store discovered devices
         self.device_adv_data = {}  # Store advertisement data
+        self.default_uuid = default_uuid
         
         # Create UI
         self.create_widgets()
@@ -31,7 +33,7 @@ class BLEScanner:
         
         ttk.Label(top_frame, text="Service UUID:").pack(side=tk.LEFT, padx=5)
         self.uuid_entry = ttk.Entry(top_frame, width=20)
-        self.uuid_entry.insert(0, "180D")  # Default: Heart Rate Service
+        self.uuid_entry.insert(0, self.default_uuid)
         self.uuid_entry.pack(side=tk.LEFT, padx=5)
         
         ttk.Label(top_frame, text="Scan Duration (sec):").pack(side=tk.LEFT, padx=(20, 5))
@@ -808,8 +810,18 @@ class BLEScanner:
             return uuid.lower()
             
 def main():
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="BLE Device Explorer - Scan and connect to Bluetooth Low Energy devices")
+    parser.add_argument(
+        '--svc-uuid',
+        type=str,
+        default="180D",
+        help="Default service UUID to scan for (default: 180D - Heart Rate Service)"
+    )
+    args = parser.parse_args()
+    
     root = tk.Tk()
-    app = BLEScanner(root)
+    app = BLEScanner(root, default_uuid=args.svc_uuid)
     root.mainloop()
 
 if __name__ == "__main__":
