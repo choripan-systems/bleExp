@@ -11,7 +11,7 @@ class BLEScanner:
     def __init__(self, root, default_uuid="180D", log_file=None):
         self.root = root
         self.root.title("BLE Device Explorer")
-        self.root.geometry("1000x1100")
+        self.root.geometry("1000x1130")
         
         self.client: Optional[BleakClient] = None
         self.scanning = False
@@ -76,7 +76,7 @@ class BLEScanner:
         self.device_listbox = tk.Listbox(
             list_container,
             height=6,
-            font=("Consolas", 9),
+            font=("Consolas", 10),
             yscrollcommand=scrollbar.set
         )
         scrollbar.config(command=self.device_listbox.yview)
@@ -117,7 +117,7 @@ class BLEScanner:
             wrap=tk.WORD, 
             width=100, 
             height=20,
-            font=("Consolas", 9)
+            font=("Consolas", 10)
         )
         self.output_text.pack(fill=tk.BOTH, expand=True, pady=5)
         
@@ -961,6 +961,7 @@ def main():
     args = parser.parse_args()
     
     root = tk.Tk()
+    #root.option_add('*Font', 'System 10')
     app = BLEScanner(root, default_uuid=args.svc_uuid, log_file=args.log_file)
     
     # Close log file on exit
