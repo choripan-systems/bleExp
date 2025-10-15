@@ -11,7 +11,7 @@ class BLEScanner:
     def __init__(self, root, default_uuid="180D", log_file=None):
         self.root = root
         self.root.title("BLE Device Explorer")
-        self.root.geometry("1000x1130")
+        self.root.geometry("1000x1080")
         
         self.client: Optional[BleakClient] = None
         self.scanning = False
@@ -87,14 +87,6 @@ class BLEScanner:
         button_frame = ttk.Frame(device_frame)
         button_frame.pack(fill=tk.X, pady=(5, 0))
         
-        self.connect_btn = ttk.Button(
-            button_frame,
-            text="Connect to Selected Device",
-            command=self.connect_to_selected,
-            state=tk.DISABLED
-        )
-        self.connect_btn.pack(side=tk.LEFT, padx=5)
-        
         self.show_adv_btn = ttk.Button(
             button_frame,
             text="Show Advertisement Data",
@@ -102,6 +94,26 @@ class BLEScanner:
             state=tk.DISABLED
         )
         self.show_adv_btn.pack(side=tk.LEFT, padx=5)
+
+        self.connect_btn = ttk.Button(
+            button_frame,
+            text="Connect to Selected Device",
+            command=self.connect_to_selected,
+            state=tk.DISABLED
+        )
+        self.connect_btn.pack(side=tk.LEFT, padx=5)
+
+        style = ttk.Style()
+        style.configure("Red.TButton", foreground="red")
+
+        self.disconnect_btn = ttk.Button(
+            button_frame,
+            text="Disconnect",
+            style="Red.TButton",
+            command=self.disconnect_device,
+            state=tk.DISABLED
+        )
+        self.disconnect_btn.pack(side=tk.RIGHT, padx=5)
         
         # Separator
         ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
@@ -120,18 +132,6 @@ class BLEScanner:
             font=("Consolas", 10)
         )
         self.output_text.pack(fill=tk.BOTH, expand=True, pady=5)
-        
-        # Bottom frame for disconnect button
-        bottom_frame = ttk.Frame(self.root, padding="10")
-        bottom_frame.pack(fill=tk.X)
-        
-        self.disconnect_btn = ttk.Button(
-            bottom_frame, 
-            text="Disconnect", 
-            command=self.disconnect_device,
-            state=tk.DISABLED
-        )
-        self.disconnect_btn.pack(side=tk.LEFT, padx=5)
         
         # Read characteristic frame
         read_frame = ttk.LabelFrame(self.root, text="Read Characteristic", padding="10")
