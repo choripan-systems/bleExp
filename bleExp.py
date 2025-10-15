@@ -1,3 +1,5 @@
+#! /usr/bin/python
+
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 import asyncio
@@ -12,6 +14,15 @@ class BLEScanner:
         self.root = root
         self.root.title("BLE Device Explorer")
         self.root.geometry("1000x1080")
+        
+        # Set custom icon if available
+        try:
+            icon_path = "bleExp.png"
+            icon_img = tk.PhotoImage(file=icon_path)
+            self.root.iconphoto(True, icon_img)
+        except Exception as e:
+            # Icon file not found or error loading - continue without icon
+            pass
         
         self.client: Optional[BleakClient] = None
         self.scanning = False
@@ -31,7 +42,7 @@ class BLEScanner:
             try:
                 self.log_file_handle = open(self.log_file, 'a', encoding='utf-8')
                 self._write_to_log_file(f"\n{'='*80}\n")
-                self._write_to_log_file(f"BLE Scanner Log - Session started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                self._write_to_log_file(f"BLE Explorer Log - Session started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 self._write_to_log_file(f"{'='*80}\n")
             except Exception as e:
                 print(f"Warning: Could not open log file '{self.log_file}': {e}")
@@ -973,7 +984,7 @@ def main():
             app.log_file_handle.close()
         root.destroy()
     
-    root.protocol("WM_DELETE_WINDOW", on_closing)   
+    root.protocol("WM_DELETE_WINDOW", on_closing)  
     root.mainloop()
 
 if __name__ == "__main__":
