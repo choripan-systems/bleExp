@@ -8,7 +8,7 @@ from datetime import datetime
 import argparse
 
 class BLEScanner:
-    def __init__(self, root, default_uuid="180D"):
+    def __init__(self, root, default_uuid="180D", log_file=None):
         self.root = root
         self.root.title("BLE Device Explorer")
         self.root.geometry("1000x1100")
@@ -23,6 +23,19 @@ class BLEScanner:
         self.discovered_devices = []  # Store discovered devices
         self.device_adv_data = {}  # Store advertisement data
         self.default_uuid = default_uuid
+        self.log_file = log_file
+        self.log_file_handle = None
+        
+        # Open log file if specified
+        if self.log_file:
+            try:
+                self.log_file_handle = open(self.log_file, 'a', encoding='utf-8')
+                self._write_to_log_file(f"\n{'='*80}\n")
+                self._write_to_log_file(f"BLE Scanner Log - Session started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                self._write_to_log_file(f"{'='*80}\n")
+            except Exception as e:
+                print(f"Warning: Could not open log file '{self.log_file}': {e}")
+                self.log_file_handle = None
         
         # Create UI
         self.create_widgets()
@@ -216,6 +229,17 @@ class BLEScanner:
     def _log_impl(self, message):
         self.output_text.insert(tk.END, message + "\n")
         self.output_text.see(tk.END)
+        # Write to log file if enabled
+        if self.log_file_handle:
+            self._write_to_log_file(message + "\n")
+            
+    def _write_to_log_file(self, text):
+        """Write text to log file and flush immediately"""
+        try:
+            self.log_file_handle.write(text)
+            self.log_file_handle.flush()
+        except Exception as e:
+            print(f"Error writing to log file: {e}")
         
     def update_status(self, message, color="blue"):
         """Update status label"""
@@ -928,10 +952,27 @@ def main():
         default="180D",
         help="Default service UUID to scan for (default: 180D - Heart Rate Service)"
     )
+    parser.add_argument(
+        '--log-file',
+        type=str,
+        default=None,
+        help="Optional log file path to save all output (appends to existing file)"
+    )
     args = parser.parse_args()
     
     root = tk.Tk()
-    app = BLEScanner(root, default_uuid=args.svc_uuid)
+    app = BLEScanner(root, default_uuid=args.svc_uuid, log_file=args.log_file)
+    
+    # Close log file on exit
+    def on_closing():
+        if app.log_file_handle:
+            app._write_to_log_file(f"\n{'='*80}\n")
+            app._write_to_log_file(f"Session ended at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            app._write_to_log_file(f"{'='*80}\n\n")
+            app.log_file_handle.close()
+        root.destroy()
+    
+    root.protocol("WM_DELETE_WINDOW", on_closing)   
     root.mainloop()
 
 if __name__ == "__main__":
