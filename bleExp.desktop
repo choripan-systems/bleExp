@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=BLE Explorer
-Exec=/path/to/bleExp/install/folder/bleExp.py --log-file logs/bleExp.log
+Exec=path-to-bleExp-folder/bleExp.py
 Terminal=false
-Icon=/path/to/bleExp/install/folder/bleExp.png
-Path=/path/to/bleExp/install/folder/
+Icon=path-to-bleExp-folder/bleExp.png
+Path=path-to-bleExp-folder/
 Categories=Development;Utility;
 

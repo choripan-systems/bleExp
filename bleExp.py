@@ -989,13 +989,26 @@ def main():
     #root.option_add('*Font', 'System 10')
     app = BLEScanner(root, service_uuid=args.svc_uuid, scan_duration=args.scan_duration, log_file=args.log_file, text_font_size=args.text_font_size)
     
-    # Close log file on exit
+    # Disconnect (if needed) and lose log file on exit
     def on_closing():
+        # Disconnect from BLE device if connected
+        if app.client and app.client.is_connected:
+            app.log("\nDisconnecting before exit...")
+            if app.loop and app.loop.is_running():
+                # Schedule disconnect in the event loop
+                future = asyncio.run_coroutine_threadsafe(app.async_disconnect(), app.loop)
+                try:
+                    future.result(timeout=3.0)  # Wait up to 3 seconds for disconnect
+                except Exception as e:
+                    print(f"Error during disconnect: {e}")
+        
+        # Close log file      
         if app.log_file_handle:
             app._write_to_log_file(f"\n{'='*80}\n")
             app._write_to_log_file(f"Session ended at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             app._write_to_log_file(f"{'='*80}\n\n")
             app.log_file_handle.close()
+            
         root.destroy()
     
     root.protocol("WM_DELETE_WINDOW", on_closing)  
