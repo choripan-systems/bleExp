@@ -10,7 +10,7 @@ from datetime import datetime
 import argparse
 
 class BLEScanner:
-    def __init__(self, root, default_uuid="180D", log_file=None):
+    def __init__(self, root, service_uuid, scan_duration, log_file, text_font_size):
         self.root = root
         self.root.title("BLE Device Explorer")
         self.root.geometry("1000x1080")
@@ -33,9 +33,11 @@ class BLEScanner:
         self.loop = None  # Store the event loop
         self.discovered_devices = []  # Store discovered devices
         self.device_adv_data = {}  # Store advertisement data
-        self.default_uuid = default_uuid
+        self.service_uuid = service_uuid
+        self.scan_duration = scan_duration
         self.log_file = log_file
         self.log_file_handle = None
+        self.text_font_size = text_font_size;
         
         # Open log file if specified
         if self.log_file:
@@ -58,12 +60,12 @@ class BLEScanner:
         
         ttk.Label(top_frame, text="Service UUID:").pack(side=tk.LEFT, padx=5)
         self.uuid_entry = ttk.Entry(top_frame, width=20)
-        self.uuid_entry.insert(0, self.default_uuid)
+        self.uuid_entry.insert(0, self.service_uuid)
         self.uuid_entry.pack(side=tk.LEFT, padx=5)
         
         ttk.Label(top_frame, text="Scan Duration (sec):").pack(side=tk.LEFT, padx=(20, 5))
         self.scan_duration_entry = ttk.Entry(top_frame, width=8)
-        self.scan_duration_entry.insert(0, "5")
+        self.scan_duration_entry.insert(0, self.scan_duration)
         self.scan_duration_entry.pack(side=tk.LEFT, padx=5)
         
         self.scan_btn = ttk.Button(top_frame, text="Start Scan", command=self.toggle_scan)
@@ -87,7 +89,7 @@ class BLEScanner:
         self.device_listbox = tk.Listbox(
             list_container,
             height=6,
-            font=("Consolas", 10),
+            font=("Consolas", self.text_font_size),
             yscrollcommand=scrollbar.set
         )
         scrollbar.config(command=self.device_listbox.yview)
@@ -140,7 +142,7 @@ class BLEScanner:
             wrap=tk.WORD, 
             width=100, 
             height=20,
-            font=("Consolas", 10)
+            font=("Consolas", self.text_font_size)
         )
         self.output_text.pack(fill=tk.BOTH, expand=True, pady=5)
         
@@ -960,8 +962,14 @@ def main():
     parser.add_argument(
         '--svc-uuid',
         type=str,
-        default="180D",
-        help="Default service UUID to scan for (default: 180D - Heart Rate Service)"
+        default="180A",
+        help="Service UUID to scan for (default: 180A - Device Information Service)"
+    )
+    parser.add_argument(
+        '--scan-duration',
+        type=str,
+        default="5",
+        help="Duration of the device scan (default: 5 seconds)"
     )
     parser.add_argument(
         '--log-file',
@@ -969,11 +977,17 @@ def main():
         default=None,
         help="Optional log file path to save all output (appends to existing file)"
     )
+    parser.add_argument(
+        '--text-font-size',
+        type=str,
+        default="10",
+        help="Font size used for the text output (default: 10 points)"
+    )
     args = parser.parse_args()
     
     root = tk.Tk()
     #root.option_add('*Font', 'System 10')
-    app = BLEScanner(root, default_uuid=args.svc_uuid, log_file=args.log_file)
+    app = BLEScanner(root, service_uuid=args.svc_uuid, scan_duration=args.scan_duration, log_file=args.log_file, text_font_size=args.text_font_size)
     
     # Close log file on exit
     def on_closing():
