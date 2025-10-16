@@ -59,6 +59,8 @@ sed -i s'/path-to-bleExp-folder/<path>/' $HOME/.local/share/applications/bleExp.
 
 In some cases you may need to log out and log back in for the **bleExp** icon to show up in the app launcher panel.
 
+![GNOME app launch panel](./assets/gnome-app-launch-panel.png)
+
 # Credits
 
 The code for this app was developed via an interactive session with the [Claude AI](https://www.claude.ai) assistant. It took about 10 back-and-forth's with the chatbot to come up with the initial working version.
