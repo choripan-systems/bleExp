@@ -54,7 +54,13 @@ On systems that use the GNOME desktop, the supplied bleExp.desktop file can be u
 ``` bash
 cp bleExp.desktop $HOME/.local/share/applications/
 chmod +x $HOME/.local/share/applications/bleExp.desktop
-sed -i s'/path-to-bleExp-folder/<path>/' $HOME/.local/share/applications/bleExp.desktop
+sed -i s'/path-to-bleExp-folder/<path>/g' $HOME/.local/share/applications/bleExp.desktop
+```
+
+For example, if your username is "jdoe" and you installed **bleExp** in the "Apps/bleExp" home folder, then the sed command would be:
+
+``` bash
+sed -i s'/path-to-bleExp-folder/\/home\/jdoe\/Apps\/bleExp/g' $HOME/.local/share/applications/bleExp.desktop
 ```
 
 In some cases you may need to log out and log back in for the **bleExp** icon to show up in the app launcher panel. In the image below you can see the icon listed on the lower-right:
