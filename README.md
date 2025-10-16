@@ -57,7 +57,7 @@ chmod +x $HOME/.local/share/applications/bleExp.desktop
 sed -i s'/path-to-bleExp-folder/<path>/' $HOME/.local/share/applications/bleExp.desktop
 ```
 
-In some cases you may need to log out and log back in for the **bleExp** icon to show up in the app launcher panel.
+In some cases you may need to log out and log back in for the **bleExp** icon to show up in the app launcher panel. In the image below you can see the icon listed on the lower-right:
 
 ![GNOME app launch panel](./assets/gnome-app-launch-panel.png)
 
