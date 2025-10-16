@@ -31,7 +31,7 @@ Finally, the image below shows **bleExp** running under macOS.  Notice that in t
 
 # Running the app
 
-The app is written entirely in Python, using [tkinter](https://docs.python.org/3/library/tkinter.html) for the GUI and [bleak](https://github.com/hbldh/bleak) for BLE communication with the peripheral device.
+The app is written in Python, using [tkinter](https://docs.python.org/3/library/tkinter.html) for the GUI and [bleak](https://github.com/hbldh/bleak) for BLE communication with the peripheral device.
 
 To run the app inside a virtual environment on Linux or macOS, simply follow these steps:
 
