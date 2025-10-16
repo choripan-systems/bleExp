@@ -49,7 +49,7 @@ python3 bleExp.py [--svc-uuid <uuid>] [--scan-duration <seconds>] [--log-file <p
 
 --text-font-size specifies the size (in points) of the font used to display the output text.
 
-On systems that use the GNOME desktop, the supplied bleExp.desktop file can be used to launch the app. In the following instructions _path_ is the full path to the folder where bleExp was installed:
+On systems that use the GNOME desktop, the supplied bleExp.desktop file can be used to launch the app. You just need to copy it to your $HOME/.local/share/applications/ folder, and replace all instances of "path-to-bleExp-folder" inside the file, for the corresponding full path to the folder where you installed **bleExp** :
 
 ``` bash
 cp bleExp.desktop $HOME/.local/share/applications/
@@ -57,13 +57,13 @@ chmod +x $HOME/.local/share/applications/bleExp.desktop
 sed -i s'/path-to-bleExp-folder/<path>/g' $HOME/.local/share/applications/bleExp.desktop
 ```
 
-For example, if your username is "jdoe" and you installed **bleExp** in the "Apps/bleExp" home folder, then the sed command would be:
+For example, if your username is "jdoe" and you installed **bleExp** in the $HOME/Apps/bleExp folder, then the sed command to use would be:
 
 ``` bash
 sed -i s'/path-to-bleExp-folder/\/home\/jdoe\/Apps\/bleExp/g' $HOME/.local/share/applications/bleExp.desktop
 ```
 
-In some cases you may need to log out and log back in for the **bleExp** icon to show up in the app launcher panel. In the image below you can see the icon listed on the lower-right:
+Notice that in some cases you may need to log out and log back in for the **bleExp** icon to show up in the app launcher panel. In the image below you can see the icon listed in the lower-right corner inside the panel:
 
 ![GNOME app launch panel](./assets/gnome-app-launch-panel.png)
 
