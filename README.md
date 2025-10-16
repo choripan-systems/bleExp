@@ -21,26 +21,44 @@ Next we enable indications on the Fitness Machine Control Point characteristic (
 
 ![bleExp app discovering all services and characteristics](./assets/bleExp-Demo-3.png)
 
-Finally, the image below shows the FTMS's Indoor Bike Data notifications (0x2AD2) sent by the indoor bike trainer once a second:
+Next we enable notifications on the Indoor Bike Data characteristic (0x2AD2) and we can see the app logging the periodic notifications sent out by the trainer once a second:
 
 ![bleExp app logging the notification messages](./assets/bleExp-Demo-4.png)
+
+Finally, the image below shows **bleExp** running under macOS.  Notice that in this case the device scan output shows a 128-bit UUID intead of the BLE MAC address:
+
+![bleExp app running on macOS](./assets/bleExp-Demo-5.png)
 
 # Running the app
 
 The app is written entirely in Python, using [tkinter](https://docs.python.org/3/library/tkinter.html) for the GUI and [bleak](https://github.com/hbldh/bleak) for BLE communication with the peripheral device.
 
-To run the app inside a virtual environment, simply follow these steps:
+To run the app inside a virtual environment on Linux or macOS, simply follow these steps:
 
 ``` bash
 python3 -m venv venv
 source venv/bin/activate
 pip install bleak
-python3 bleExp.py [--svc-uuid <uuid>] [--log-file <path>]
+python3 bleExp.py [--svc-uuid <uuid>] [--scan-duration <seconds>] [--log-file <path>] [--text-font-size <points>]
 ```
-The optional command line argument --svc-uuid specifies the Service UUID to scan for in the BLE advertisements, while the argument --log-file specifies the pathname of the log file.
+--svc-uuid specifies the Service UUID to scan for in the BLE advertisements.
 
-The supplied bleExp.desktop file can be used to launch the app using the GNOME desktop. Simply copy the file to your $HOME/.local/share/applications folder, and replace all instances of "/path/to/bleExp/install/folder/" with the appropiate full path to the folder where the app was installed.
+--scan-duration specifies the duration (in seconds) of the device scan process.
+
+--log-file specifies the pathname of the file where the app saves all the log output.
+
+--text-font-size specifies the size (in points) of the font used to display the output text.
+
+On systems that use the GNOME desktop, the supplied bleExp.desktop file can be used to launch the app. In the following instructions _path_ is the full path to the folder where bleExp was installed:
+
+``` bash
+cp bleExp.desktop $HOME/.local/share/applications/
+chmod +x $HOME/.local/share/applications/bleExp.desktop
+sed -i s'/path-to-bleExp-folder/<path>/' $HOME/.local/share/applications/bleExp.desktop
+```
+
+In some cases you may need to log out and log back in for the **bleExp** icon to show up in the app launcher panel.
 
 # Credits
 
-The code for this app was developed via an interactive session with the [Claude AI](https://www.claude.ai) assistant. It took only 10 back-and-forth's with the chatbot to come up with this working version.
+The code for this app was developed via an interactive session with the [Claude AI](https://www.claude.ai) assistant. It took about 10 back-and-forth's with the chatbot to come up with the initial working version.
