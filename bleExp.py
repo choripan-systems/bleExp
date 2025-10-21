@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/python3
 
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
@@ -62,6 +62,10 @@ class BLEScanner:
         self.uuid_entry = ttk.Entry(top_frame, width=20)
         self.uuid_entry.insert(0, self.service_uuid)
         self.uuid_entry.pack(side=tk.LEFT, padx=5)
+
+        ttk.Label(top_frame, text="Name Prefix:").pack(side=tk.LEFT, padx=(20, 5))
+        self.name_prefix_entry = ttk.Entry(top_frame, width=15)
+        self.name_prefix_entry.pack(side=tk.LEFT, padx=5)        
         
         ttk.Label(top_frame, text="Scan Duration (sec):").pack(side=tk.LEFT, padx=(20, 5))
         self.scan_duration_entry = ttk.Entry(top_frame, width=8)
@@ -279,27 +283,30 @@ class BLEScanner:
             
     def start_scan(self):
         uuid_input = self.uuid_entry.get().strip().replace("-", "").replace(" ", "")
-        if not uuid_input:
-            messagebox.showerror("Error", "Please enter a UUID")
-            return
-            
-        # Validate hex input
-        try:
-            int(uuid_input, 16)
-        except ValueError:
-            messagebox.showerror("Error", "Invalid hex UUID")
+        name_prefix = self.name_prefix_entry.get().strip()
+        
+        # At least one filter must be specified
+        if not uuid_input and not name_prefix:
+            messagebox.showerror("Error", "Please enter a UUID or Name Prefix (or both)")
             return
         
-        # Determine if it's a 16-bit or 128-bit UUID
-        if len(uuid_input) == 4:
-            # 16-bit UUID
-            uuid_type = "16-bit"
-        elif len(uuid_input) == 32:
-            # 128-bit UUID (without dashes)
-            uuid_type = "128-bit"
-        else:
-            messagebox.showerror("Error", "UUID must be 4 hex digits (16-bit) or 32 hex digits (128-bit)")
-            return
+        # Validate UUID if provided
+        uuid_type = None
+        if uuid_input:
+            try:
+                int(uuid_input, 16)
+            except ValueError:
+                messagebox.showerror("Error", "Invalid hex UUID")
+                return
+            
+            # Determine if it's a 16-bit or 128-bit UUID
+            if len(uuid_input) == 4:
+                uuid_type = "16-bit"
+            elif len(uuid_input) == 32:
+                uuid_type = "128-bit"
+            else:
+                messagebox.showerror("Error", "UUID must be 4 hex digits (16-bit) or 32 hex digits (128-bit)")
+                return
         
         # Validate scan duration
         try:
@@ -314,26 +321,28 @@ class BLEScanner:
         self.scanning = True
         self.scan_btn.config(text="Stop Scan")
         self.uuid_entry.config(state=tk.DISABLED)
+        self.name_prefix_entry.config(state=tk.DISABLED)
         self.scan_duration_entry.config(state=tk.DISABLED)
         self.output_text.delete(1.0, tk.END)
         
         # Run scan in separate thread
-        thread = threading.Thread(target=self.run_scan, args=(uuid_input, uuid_type, duration), daemon=True)
+        thread = threading.Thread(target=self.run_scan, args=(uuid_input, uuid_type, name_prefix, duration), daemon=True)
         thread.start()
         
     def stop_scan(self):
         self.scanning = False
         self.scan_btn.config(text="Start Scan")
         self.uuid_entry.config(state=tk.NORMAL)
+        self.name_prefix_entry.config(state=tk.NORMAL)
         self.scan_duration_entry.config(state=tk.NORMAL)
         self.update_status("Scan stopped", "orange")
         
-    def run_scan(self, uuid_input, uuid_type, duration):
+    def run_scan(self, uuid_input, uuid_type, name_prefix, duration):
         """Run the BLE scan in an asyncio event loop"""
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         try:
-            self.loop.run_until_complete(self.scan_for_devices(uuid_input, uuid_type, duration))
+            self.loop.run_until_complete(self.scan_for_devices(uuid_input, uuid_type, name_prefix, duration))
         except Exception as e:
             self.log(f"Error: {str(e)}")
             self.update_status(f"Error: {str(e)}", "red")
@@ -341,7 +350,7 @@ class BLEScanner:
             self.loop.close()
             self.loop = None
             
-    async def scan_for_devices(self, uuid_input, uuid_type, duration):
+    async def scan_for_devices(self, uuid_input, uuid_type, name_prefix, duration):
         """Scan for BLE devices with the specified UUID"""
         # Convert to full 128-bit UUID if needed
         if uuid_type == "16-bit":
@@ -351,9 +360,14 @@ class BLEScanner:
             uuid_lower = uuid_input.lower()
             full_uuid = f"{uuid_lower[0:8]}-{uuid_lower[8:12]}-{uuid_lower[12:16]}-{uuid_lower[16:20]}-{uuid_lower[20:32]}"
         
-        self.log(f"Scanning for devices advertising UUID: {uuid_input}")
-        self.log(f"UUID Type: {uuid_type}")
-        self.log(f"Full UUID: {full_uuid}")
+        # Log scan criteria
+        self.log(f"Scanning for devices matching:")
+        if uuid_input:
+            self.log(f"  Service UUID: {uuid_input}")
+            self.log(f"  UUID Type: {uuid_type}")
+            self.log(f"  Full UUID: {full_uuid}")
+        if name_prefix:
+            self.log(f"  Name Prefix: '{name_prefix}'")
         self.log(f"Scan duration: {duration} seconds")
         self.log("-" * 80)
         self.update_status("Scanning...", "green")
@@ -363,15 +377,32 @@ class BLEScanner:
         
         def detection_callback(device, advertisement_data):
             """Called when a device is detected"""
-            # Check if the UUID is in the advertised service UUIDs
-            if advertisement_data.service_uuids:
-                adv_uuids = [u.lower() for u in advertisement_data.service_uuids]
-                if full_uuid in adv_uuids:
-                    # Avoid duplicates
-                    if not any(d.address == device.address for d in matching_devices):
-                        matching_devices.append(device)
-                        device_adv_data[device.address] = advertisement_data
-                        self.log(f"Found: {device.name or 'Unknown'} ({device.address})")
+            # Check if device matches UUID filter (if specified)
+            uuid_match = False
+            if full_uuid:
+                if advertisement_data.service_uuids:
+                    adv_uuids = [u.lower() for u in advertisement_data.service_uuids]
+                    uuid_match = full_uuid in adv_uuids
+            else:
+                # If no UUID filter, consider it a match
+                uuid_match = True
+            
+            # Check if device matches name prefix filter (if specified)
+            name_match = False
+            if name_prefix:
+                device_name = device.name or ""
+                name_match = device_name.startswith(name_prefix)
+            else:
+                # If no name filter, consider it a match
+                name_match = True
+            
+            # Device must match both filters (if both are specified)
+            if uuid_match and name_match:
+                # Avoid duplicates
+                if not any(d.address == device.address for d in matching_devices):
+                    matching_devices.append(device)
+                    device_adv_data[device.address] = advertisement_data
+                    self.log(f"Found: {device.name or 'Unknown'} ({device.address})")
         
         try:
             # Create scanner with callback
@@ -386,12 +417,13 @@ class BLEScanner:
                 return
             
             if not matching_devices:
-                self.log(f"\nNo devices found advertising UUID {uuid_input}")
-                self.log("Note: The device must be actively advertising this service UUID")
+                self.log(f"\nNo devices found matching the specified criteria")
+                self.log("Note: The device must match all specified filters (UUID and/or name prefix)")                
                 self.update_status("No matching devices found", "orange")
                 self.scanning = False
                 self.root.after(0, lambda: self.scan_btn.config(text="Start Scan"))
                 self.root.after(0, lambda: self.uuid_entry.config(state=tk.NORMAL))
+                self.root.after(0, lambda: self.name_prefix_entry.config(state=tk.NORMAL))
                 self.root.after(0, lambda: self.scan_duration_entry.config(state=tk.NORMAL))
                 return
             
@@ -412,6 +444,7 @@ class BLEScanner:
             self.scanning = False
             self.root.after(0, lambda: self.scan_btn.config(text="Start Scan"))
             self.root.after(0, lambda: self.uuid_entry.config(state=tk.NORMAL))
+            self.root.after(0, lambda: self.name_prefix_entry.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.scan_duration_entry.config(state=tk.NORMAL))
             
     def _populate_device_list(self):
