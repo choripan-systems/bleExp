@@ -10,7 +10,7 @@ from datetime import datetime
 import argparse
 
 class BLEScanner:
-    def __init__(self, root, service_uuid, scan_duration, log_file, text_font_size):
+    def __init__(self, root, cmd_args):
         self.root = root
         self.root.title("BLE Device Explorer")
         self.root.geometry("1000x1080")
@@ -33,11 +33,12 @@ class BLEScanner:
         self.loop = None  # Store the event loop
         self.discovered_devices = []  # Store discovered devices
         self.device_adv_data = {}  # Store advertisement data
-        self.service_uuid = service_uuid
-        self.scan_duration = scan_duration
-        self.log_file = log_file
+        self.service_uuid = cmd_args.svc_uuid
+        self.device_name_prefix = cmd_args.dev_name_prefix
+        self.scan_duration = cmd_args.scan_duration
+        self.log_file = cmd_args.log_file
         self.log_file_handle = None
-        self.text_font_size = text_font_size;
+        self.text_font_size = cmd_args.text_font_size;
         
         # Open log file if specified
         if self.log_file:
@@ -58,13 +59,16 @@ class BLEScanner:
         top_frame = ttk.Frame(self.root, padding="10")
         top_frame.pack(fill=tk.X)
         
-        ttk.Label(top_frame, text="Service UUID:").pack(side=tk.LEFT, padx=5)
+        ttk.Label(top_frame, text="Service Data UUID:").pack(side=tk.LEFT, padx=5)
         self.uuid_entry = ttk.Entry(top_frame, width=20)
-        self.uuid_entry.insert(0, self.service_uuid)
+        if self.service_uuid:
+            self.uuid_entry.insert(0, self.service_uuid)
         self.uuid_entry.pack(side=tk.LEFT, padx=5)
 
         ttk.Label(top_frame, text="Name Prefix:").pack(side=tk.LEFT, padx=(20, 5))
         self.name_prefix_entry = ttk.Entry(top_frame, width=15)
+        if self.device_name_prefix:
+            self.name_prefix_entry.insert(0, self.device_name_prefix)
         self.name_prefix_entry.pack(side=tk.LEFT, padx=5)        
         
         ttk.Label(top_frame, text="Scan Duration (sec):").pack(side=tk.LEFT, padx=(20, 5))
@@ -287,7 +291,7 @@ class BLEScanner:
         
         # At least one filter must be specified
         if not uuid_input and not name_prefix:
-            messagebox.showerror("Error", "Please enter a UUID or Name Prefix (or both)")
+            messagebox.showerror("Error", "Please enter a Service Data UUID or a Device Name Prefix (or both)")
             return
         
         # Validate UUID if provided
@@ -351,23 +355,25 @@ class BLEScanner:
             self.loop = None
             
     async def scan_for_devices(self, uuid_input, uuid_type, name_prefix, duration):
-        """Scan for BLE devices with the specified UUID"""
+        """Scan for BLE devices with the specified UUID and/or name prefix"""
         # Convert to full 128-bit UUID if needed
-        if uuid_type == "16-bit":
-            full_uuid = f"0000{uuid_input.lower()}-0000-1000-8000-00805f9b34fb"
-        else:
-            # Format 128-bit UUID with dashes
-            uuid_lower = uuid_input.lower()
-            full_uuid = f"{uuid_lower[0:8]}-{uuid_lower[8:12]}-{uuid_lower[12:16]}-{uuid_lower[16:20]}-{uuid_lower[20:32]}"
+        full_uuid = None
+        if uuid_input:
+            if uuid_type == "16-bit":
+                full_uuid = f"0000{uuid_input.lower()}-0000-1000-8000-00805f9b34fb"
+            else:
+                # Format 128-bit UUID with dashes
+                uuid_lower = uuid_input.lower()
+                full_uuid = f"{uuid_lower[0:8]}-{uuid_lower[8:12]}-{uuid_lower[12:16]}-{uuid_lower[16:20]}-{uuid_lower[20:32]}"
         
         # Log scan criteria
         self.log(f"Scanning for devices matching:")
         if uuid_input:
-            self.log(f"  Service UUID: {uuid_input}")
+            self.log(f"  Service Data UUID: {uuid_input}")
             self.log(f"  UUID Type: {uuid_type}")
             self.log(f"  Full UUID: {full_uuid}")
         if name_prefix:
-            self.log(f"  Name Prefix: '{name_prefix}'")
+            self.log(f"  Device Name Prefix: '{name_prefix}'")
         self.log(f"Scan duration: {duration} seconds")
         self.log("-" * 80)
         self.update_status("Scanning...", "green")
@@ -378,23 +384,18 @@ class BLEScanner:
         def detection_callback(device, advertisement_data):
             """Called when a device is detected"""
             # Check if device matches UUID filter (if specified)
-            uuid_match = False
+            uuid_match = True  # Default to True if no UUID filter
             if full_uuid:
+                uuid_match = False
                 if advertisement_data.service_uuids:
                     adv_uuids = [u.lower() for u in advertisement_data.service_uuids]
                     uuid_match = full_uuid in adv_uuids
-            else:
-                # If no UUID filter, consider it a match
-                uuid_match = True
             
             # Check if device matches name prefix filter (if specified)
-            name_match = False
+            name_match = True  # Default to True if no name filter
             if name_prefix:
                 device_name = device.name or ""
                 name_match = device_name.startswith(name_prefix)
-            else:
-                # If no name filter, consider it a match
-                name_match = True
             
             # Device must match both filters (if both are specified)
             if uuid_match and name_match:
@@ -418,7 +419,7 @@ class BLEScanner:
             
             if not matching_devices:
                 self.log(f"\nNo devices found matching the specified criteria")
-                self.log("Note: The device must match all specified filters (UUID and/or name prefix)")                
+                self.log("Note: The device must match all specified filters (UUID and/or name prefix)")
                 self.update_status("No matching devices found", "orange")
                 self.scanning = False
                 self.root.after(0, lambda: self.scan_btn.config(text="Start Scan"))
@@ -431,7 +432,7 @@ class BLEScanner:
             self.discovered_devices = matching_devices
             self.device_adv_data = device_adv_data
             
-            self.log(f"\nFound {len(matching_devices)} device(s) with UUID {uuid_input}\n")
+            self.log(f"\nFound {len(matching_devices)} matching device(s)\n")
             
             # Populate device list
             self.root.after(0, self._populate_device_list)
@@ -995,8 +996,14 @@ def main():
     parser.add_argument(
         '--svc-uuid',
         type=str,
-        default="180A",
-        help="Service UUID to scan for (default: 180A - Device Information Service)"
+        default=None,
+        help="Service Data UUID to match"
+    )
+    parser.add_argument(
+        '--dev-name-prefix',
+        type=str,
+        default=None,
+        help="Device name prefix to match"
     )
     parser.add_argument(
         '--scan-duration',
@@ -1020,9 +1027,9 @@ def main():
     
     root = tk.Tk()
     #root.option_add('*Font', 'System 10')
-    app = BLEScanner(root, service_uuid=args.svc_uuid, scan_duration=args.scan_duration, log_file=args.log_file, text_font_size=args.text_font_size)
+    app = BLEScanner(root, cmd_args=args)
     
-    # Disconnect (if needed) and lose log file on exit
+    # Disconnect (if needed) and close log file on exit
     def on_closing():
         # Disconnect from BLE device if connected
         if app.client and app.client.is_connected:
