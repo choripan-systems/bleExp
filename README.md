@@ -2,7 +2,7 @@
 
 **bleExp** is a simple Bluetooth Low Energy explorer app that supports the following features:
 
-1. It can discover BLE devices that advertise a specified service UUID.
+1. It can discover BLE devices that advertise a specified Service Data UUID and/or a Device Name that matches a specified prefix.
 2. It can display the Advertisement Data sent by the selected device in its Advertisement Indication and Scan Response BLE messages.
 3. It can connect to the selected device and discover all its services and their characteristics. Characteristics that support the READ property have their value automatically read.
 4. It can write an arbitrary value to any characteristic which supports the WRITE property.
@@ -39,9 +39,11 @@ To run the app inside a virtual environment on Linux or macOS, simply follow the
 python3 -m venv venv
 source venv/bin/activate
 pip install bleak
-python3 bleExp.py [--svc-uuid <uuid>] [--scan-duration <seconds>] [--log-file <path>] [--text-font-size <points>]
+python3 bleExp.py [--svc-uuid <uuid>] [--dev-name-prefix <prefix>] [--scan-duration <seconds>] [--log-file <path>] [--text-font-size <points>]
 ```
 --svc-uuid specifies the Service UUID to scan for in the BLE advertisements.
+
+--dev-name-prefix specifies the case-sensitive Device Name prefix to scan for in the BLE advertisements.
 
 --scan-duration specifies the duration (in seconds) of the device scan process.
 
