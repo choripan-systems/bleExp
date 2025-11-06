@@ -41,7 +41,8 @@ class BLEScanner:
         self.logFile = cmdArgs.log_file
         self.logFileHandle = None
         self.textFontSize = cmdArgs.text_font_size
-        
+        self.autoScan = cmdArgs.auto_scan
+
         # Open log file if specified
         if self.logFile:
             try:
@@ -244,6 +245,10 @@ class BLEScanner:
         
         # Configure grid weights
         notifyCharFrame.columnconfigure(1, weight=1)
+
+        # If requested, start a device scan...
+        if self.autoScan:
+            self.toggleScan()
         
     def log(self, message):
         """Thread-safe logging to the text widget"""
@@ -742,10 +747,10 @@ class BLEScanner:
         """Read a characteristic value"""
         try:
             # Normalize UUID
-            uuid_normalized = self.normalize_uuid(uuid)
+            normalizedUuid = self.normalize_uuid(uuid)
             
             # Check if this characteristic supports reading
-            if uuid_normalized not in self.readableCharacteristics:
+            if normalizedUuid not in self.readableCharacteristics:
                 self.log(f"\nError: Characteristic {uuid} does not support reading or not found")
                 return
             
@@ -753,7 +758,7 @@ class BLEScanner:
             self.log(f"\nReading characteristic {uuid}...")
             self.updateStatus("Reading...", "green")
             
-            value = await self.client.read_gatt_char(uuid_normalized)
+            value = await self.client.read_gatt_char(normalizedUuid)
             
             # Format value as hex
             hex_value = " ".join(f"{b:02x}" for b in value)
@@ -822,10 +827,10 @@ class BLEScanner:
         """Write a value to a characteristic"""
         try:
             # Normalize UUID
-            uuid_normalized = self.normalize_uuid(uuid)
+            normalizedUuid = self.normalize_uuid(uuid)
             
             # Check if this is a writable characteristic
-            if uuid_normalized not in self.writableCharacteristics:
+            if normalizedUuid not in self.writableCharacteristics:
                 self.log(f"\nError: Characteristic {uuid} is not writable or not found")
                 return
                 
@@ -867,7 +872,7 @@ class BLEScanner:
             self.log(f"  Bytes: {' '.join(f'{b:02x}' for b in data)}")
             self.updateStatus("Writing...", "green")
             
-            await self.client.write_gatt_char(uuid_normalized, data)
+            await self.client.write_gatt_char(normalizedUuid, data)
             
             self.log("Write successful!")
             self.updateStatus("Write complete", "blue")
@@ -920,20 +925,20 @@ class BLEScanner:
         """Start notifications/indications for a characteristic"""
         try:
             # Normalize UUID
-            uuid_normalized = self.normalize_uuid(uuid)
+            normalizedUuid = self.normalize_uuid(uuid)
             
             # Check if this characteristic supports notifications/indications
-            if uuid_normalized not in self.notifiableCharacteristics:
+            if normalizedUuid not in self.notifiableCharacteristics:
                 self.log(f"\nError: Characteristic {uuid} does not support notifications/indications")
                 return
             
             # Check if already subscribed
-            if uuid_normalized in self.activeNotifications:
+            if normalizedUuid in self.activeNotifications:
                 self.log(f"\nNotifications already enabled for {uuid}")
                 return
             
             # Define notification callback
-            def notification_handler(sender, data):
+            def notificationHandler(sender, data):
                 hex_value = " ".join(f"{b:02x}" for b in data)
                 timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
                 self.log(f"[{timestamp}] [NOTIFY] {uuid}: {hex_value}")
@@ -947,8 +952,8 @@ class BLEScanner:
             
             # Start notifications
             self.log(f"\nEnabling notifications for {uuid}...")
-            await self.client.start_notify(uuid_normalized, notification_handler)
-            self.activeNotifications[uuid_normalized] = True
+            await self.client.start_notify(normalizedUuid, notificationHandler)
+            self.activeNotifications[normalizedUuid] = True
             self.log("Notifications enabled!")
             self.updateStatus("Notifications enabled", "blue")
             
@@ -960,17 +965,17 @@ class BLEScanner:
         """Stop notifications/indications for a characteristic"""
         try:
             # Normalize UUID
-            uuid_normalized = self.normalize_uuid(uuid)
+            normalizedUuid = self.normalize_uuid(uuid)
             
             # Check if notifications are active
-            if uuid_normalized not in self.activeNotifications:
+            if normalizedUuid not in self.activeNotifications:
                 self.log(f"\nNo active notifications for {uuid}")
                 return
             
             # Stop notifications
             self.log(f"\nDisabling notifications for {uuid}...")
-            await self.client.stop_notify(uuid_normalized)
-            del self.activeNotifications[uuid_normalized]
+            await self.client.stop_notify(normalizedUuid)
+            del self.activeNotifications[normalizedUuid]
             self.log("Notifications disabled!")
             self.updateStatus("Notifications disabled", "blue")
             
@@ -998,10 +1003,9 @@ def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="BLE Device Explorer - Scan and connect to Bluetooth Low Energy devices")
     parser.add_argument(
-        '--svc-uuid',
-        type=str,
-        default=None,
-        help="Advertised Service UUID to match"
+        '--auto-scan',
+        action='store_true',
+        help="Enable auto scan upon start up"
     )
     parser.add_argument(
         '--dev-name-prefix',
@@ -1010,16 +1014,22 @@ def main():
         help="Device name prefix to match"
     )
     parser.add_argument(
+        '--log-file',
+        type=str,
+        default=None,
+        help="Optional log file where to save all output (appends to existing file)"
+    ) 
+    parser.add_argument(
         '--scan-duration',
         type=str,
         default="5",
         help="Duration of the device scan (default: 5 seconds)"
-    )
+    )       
     parser.add_argument(
-        '--log-file',
+        '--svc-uuid',
         type=str,
         default=None,
-        help="Optional log file path to save all output (appends to existing file)"
+        help="Advertised Service UUID to match"
     )
     parser.add_argument(
         '--text-font-size',
@@ -1040,7 +1050,7 @@ def main():
             app.log("\nDisconnecting before exit...")
             if app.loop and app.loop.is_running():
                 # Schedule disconnect in the event loop
-                future = asyncio.run_coroutine_threadsafe(app.async_disconnect(), app.loop)
+                future = asyncio.run_coroutine_threadsafe(app.asyncDisconnect(), app.loop)
                 try:
                     future.result(timeout=3.0)  # Wait up to 3 seconds for disconnect
                 except Exception as e:
