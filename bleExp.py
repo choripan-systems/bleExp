@@ -288,16 +288,17 @@ class BLEScanner:
             self.stopScan()
             
     def startScan(self):
+        # Get the device match filters
         svcUuidFilter = self.serviceUuidEntry.get().strip().replace("-", "").replace(" ", "")
         devNameFilter = self.deviceNamePrefixEntry.get().strip()
         
         # At least one filter must be specified
-        if not svcUuidFilter and not devNameFilter:
-            messagebox.showerror("Error", "Please enter a Service Data UUID or a Device Name Prefix (or both)")
-            return
+        #if not svcUuidFilter and not devNameFilter:
+        #    messagebox.showerror("Error", "Please enter a Service Data UUID or a Device Name Prefix (or both)")
+        #    return
         
         # Validate UUID if provided
-        uuid_type = None
+        uuidType = None
         if svcUuidFilter:
             try:
                 int(svcUuidFilter, 16)
@@ -307,9 +308,9 @@ class BLEScanner:
             
             # Determine if it's a 16-bit or 128-bit UUID
             if len(svcUuidFilter) == 4:
-                uuid_type = "16-bit"
+                uuidType = "16-bit"
             elif len(svcUuidFilter) == 32:
-                uuid_type = "128-bit"
+                uuidType = "128-bit"
             else:
                 messagebox.showerror("Error", "UUID must be 4 hex digits (16-bit) or 32 hex digits (128-bit)")
                 return
@@ -332,7 +333,7 @@ class BLEScanner:
         self.outputText.delete(1.0, tk.END)
         
         # Run scan in separate thread
-        thread = threading.Thread(target=self.runScan, args=(svcUuidFilter, uuid_type, devNameFilter, scanDuration), daemon=True)
+        thread = threading.Thread(target=self.runScan, args=(svcUuidFilter, uuidType, devNameFilter, scanDuration), daemon=True)
         thread.start()
         
     def stopScan(self):
@@ -343,12 +344,12 @@ class BLEScanner:
         self.scanDurationEntry.config(state=tk.NORMAL)
         self.updateStatus("Scan stopped", "orange")
         
-    def runScan(self, uuid_input, uuid_type, name_prefix, duration):
+    def runScan(self, svcUuidFilter, uuidType, devNameFilter, scanDuration):
         """Run the BLE scan in an asyncio event loop"""
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         try:
-            self.loop.run_until_complete(self.scanForDevices(uuid_input, uuid_type, name_prefix, duration))
+            self.loop.run_until_complete(self.scanForDevices(svcUuidFilter, uuidType, devNameFilter, scanDuration))
         except Exception as e:
             self.log(f"Error: {str(e)}")
             self.updateStatus(f"Error: {str(e)}", "red")
@@ -356,27 +357,27 @@ class BLEScanner:
             self.loop.close()
             self.loop = None
             
-    async def scanForDevices(self, uuid_input, uuid_type, name_prefix, duration):
+    async def scanForDevices(self, svcUuidFilter, uuidType, devNameFilter, scanDuration):
         """Scan for BLE devices with the specified UUID and/or name prefix"""
         # Convert to full 128-bit UUID if needed
         full_uuid = None
-        if uuid_input:
-            if uuid_type == "16-bit":
-                full_uuid = f"0000{uuid_input.lower()}-0000-1000-8000-00805f9b34fb"
+        if svcUuidFilter:
+            if uuidType == "16-bit":
+                full_uuid = f"0000{svcUuidFilter.lower()}-0000-1000-8000-00805f9b34fb"
             else:
                 # Format 128-bit UUID with dashes
-                uuid_lower = uuid_input.lower()
+                uuid_lower = svcUuidFilter.lower()
                 full_uuid = f"{uuid_lower[0:8]}-{uuid_lower[8:12]}-{uuid_lower[12:16]}-{uuid_lower[16:20]}-{uuid_lower[20:32]}"
         
         # Log scan criteria
         self.log(f"Scanning for devices matching:")
-        if uuid_input:
-            self.log(f"  Advertised Service UUID: {uuid_input}")
-            #self.log(f"  UUID Type: {uuid_type}")
+        if svcUuidFilter:
+            self.log(f"  Advertised Service UUID: {svcUuidFilter}")
+            #self.log(f"  UUID Type: {uuidType}")
             #self.log(f"  Full UUID: {full_uuid}")
-        if name_prefix:
-            self.log(f"  Device Name Prefix: '{name_prefix}'")
-        self.log(f"Scan duration: {duration} seconds")
+        if devNameFilter:
+            self.log(f"  Device Name Prefix: '{devNameFilter}'")
+        self.log(f"Scan duration: {scanDuration} seconds")
         self.log("-" * 80)
         self.updateStatus("Scanning...", "green")
         
@@ -396,9 +397,9 @@ class BLEScanner:
             
             # Check if device matches name prefix filter (if specified)
             nameMatch = True  # Default to True if no name filter
-            if name_prefix:
+            if devNameFilter:
                 device_name = device.name or ""
-                nameMatch = device_name.startswith(name_prefix)
+                nameMatch = device_name.startswith(devNameFilter)
             
             # Device must match both filters (if both are specified)
             if uuidMatch and nameMatch:
@@ -414,7 +415,7 @@ class BLEScanner:
             
             # Start scanning
             await scanner.start()
-            await asyncio.sleep(duration)
+            await asyncio.sleep(scanDuration)
             await scanner.stop()
             
             if not self.scanning:
