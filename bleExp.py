@@ -34,6 +34,7 @@ class BLEScanner:
         self.discoveredDevices = []  # Store discovered devices
         self.deviceAdvData = {}  # Store advertisement data
 
+        # Command line arguments
         self.serviceUuid = cmdArgs.svc_uuid
         self.deviceNamePrefix = cmdArgs.dev_name_prefix
         self.scanDuration = cmdArgs.scan_duration
@@ -73,7 +74,7 @@ class BLEScanner:
         self.deviceNamePrefixEntry.pack(side=tk.LEFT, padx=5)        
         
         ttk.Label(topFrame, text="Scan Duration:").pack(side=tk.LEFT, padx=(20, 5))
-        self.scanDurationEntry = ttk.Entry(topFrame, width=8)
+        self.scanDurationEntry = ttk.Entry(topFrame, width=6)
         self.scanDurationEntry.insert(0, self.scanDuration)
         self.scanDurationEntry.pack(side=tk.LEFT, padx=5)
         
@@ -106,11 +107,11 @@ class BLEScanner:
         self.deviceListbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         # Connect button for selected device
-        button_frame = ttk.Frame(devicesFrame)
-        button_frame.pack(fill=tk.X, pady=(5, 0))
+        buttonsFrame = ttk.Frame(devicesFrame)
+        buttonsFrame.pack(fill=tk.X, pady=(5, 0))
         
         self.showAdvDataButton = ttk.Button(
-            button_frame,
+            buttonsFrame,
             text="Show Advertisement Data",
             command=self.showAdvertisementData,
             state=tk.DISABLED
@@ -118,7 +119,7 @@ class BLEScanner:
         self.showAdvDataButton.pack(side=tk.LEFT, padx=5)
 
         self.connectButton = ttk.Button(
-            button_frame,
+            buttonsFrame,
             text="Connect to Selected Device",
             command=self.connectToSelected,
             state=tk.DISABLED
@@ -129,7 +130,7 @@ class BLEScanner:
         style.configure("Red.TButton", foreground="red")
 
         self.disconnectButton = ttk.Button(
-            button_frame,
+            buttonsFrame,
             text="Disconnect",
             style="Red.TButton",
             command=self.disconnectFromDevice,
@@ -161,8 +162,8 @@ class BLEScanner:
         
         # Characteristic UUID for reading
         ttk.Label(readCharFrame, text="Char UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
-        self.read_uuid_entry = ttk.Entry(readCharFrame, width=40)
-        self.read_uuid_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
+        self.readCharUuidEntry = ttk.Entry(readCharFrame, width=40)
+        self.readCharUuidEntry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
         
         # Read button
         self.readCharButton = ttk.Button(
@@ -182,8 +183,8 @@ class BLEScanner:
         
         # Characteristic UUID
         ttk.Label(writeCharFrame, text="Char UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
-        self.write_uuid_entry = ttk.Entry(writeCharFrame, width=40)
-        self.write_uuid_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
+        self.writeCharUuidEntry = ttk.Entry(writeCharFrame, width=40)
+        self.writeCharUuidEntry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
         
         # Value type selection
         ttk.Label(writeCharFrame, text="Value Type:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
@@ -218,28 +219,28 @@ class BLEScanner:
         
         # Characteristic UUID for notifications
         ttk.Label(notifyCharFrame, text="Char UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
-        self.notify_uuid_entry = ttk.Entry(notifyCharFrame, width=40)
-        self.notify_uuid_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
+        self.notifyCharUuidEntry = ttk.Entry(notifyCharFrame, width=40)
+        self.notifyCharUuidEntry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
         
         # Notification buttons
-        button_frame = ttk.Frame(notifyCharFrame)
-        button_frame.grid(row=1, column=1, sticky=tk.E, padx=5, pady=5)
+        buttonsFrame = ttk.Frame(notifyCharFrame)
+        buttonsFrame.grid(row=1, column=1, sticky=tk.E, padx=5, pady=5)
         
-        self.subscribeCharEnableButton = ttk.Button(
-            button_frame, 
+        self.notifyCharEnableButton = ttk.Button(
+            buttonsFrame, 
             text="Enable Notifications", 
             command=self.enableCharNotifications,
             state=tk.DISABLED
         )
-        self.subscribeCharEnableButton.pack(side=tk.LEFT, padx=5)
+        self.notifyCharEnableButton.pack(side=tk.LEFT, padx=5)
         
-        self.subscribeCharDisableButton = ttk.Button(
-            button_frame, 
+        self.notifyCharDisableButton = ttk.Button(
+            buttonsFrame, 
             text="Disable Notifications", 
             command=self.disableCharNotifications,
             state=tk.DISABLED
         )
-        self.subscribeCharDisableButton.pack(side=tk.LEFT, padx=5)
+        self.notifyCharDisableButton.pack(side=tk.LEFT, padx=5)
         
         # Configure grid weights
         notifyCharFrame.columnconfigure(1, weight=1)
@@ -277,8 +278,8 @@ class BLEScanner:
         
     def _enable_notify_buttons(self):
         """Enable the notification buttons (must be called from main thread)"""
-        self.subscribeCharEnableButton.config(state=tk.NORMAL)
-        self.subscribeCharDisableButton.config(state=tk.NORMAL)
+        self.notifyCharEnableButton.config(state=tk.NORMAL)
+        self.notifyCharDisableButton.config(state=tk.NORMAL)
         
     def toggleScan(self):
         if not self.scanning:
@@ -386,21 +387,21 @@ class BLEScanner:
             """Called when a device is detected"""
 
             # Check if device matches UUID filter (if specified)
-            uuid_match = True  # Default to True if no UUID filter
+            uuidMatch = True  # Default to True if no UUID filter
             if full_uuid:
-                uuid_match = False
+                uuidMatch = False
                 if advertisement_data.service_uuids:
                     adv_uuids = [u.lower() for u in advertisement_data.service_uuids]
-                    uuid_match = full_uuid in adv_uuids
+                    uuidMatch = full_uuid in adv_uuids
             
             # Check if device matches name prefix filter (if specified)
-            name_match = True  # Default to True if no name filter
+            nameMatch = True  # Default to True if no name filter
             if name_prefix:
                 device_name = device.name or ""
-                name_match = device_name.startswith(name_prefix)
+                nameMatch = device_name.startswith(name_prefix)
             
             # Device must match both filters (if both are specified)
-            if uuid_match and name_match:
+            if uuidMatch and nameMatch:
                 # Avoid duplicates
                 if not any(d.address == device.address for d in matchingDevices):
                     matchingDevices.append(device)
@@ -673,8 +674,8 @@ class BLEScanner:
             self.root.after(0, lambda: self.disconnectButton.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.readCharButton.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.writeCharButton.config(state=tk.DISABLED))
-            self.root.after(0, lambda: self.subscribeCharEnableButton.config(state=tk.DISABLED))
-            self.root.after(0, lambda: self.subscribeCharDisableButton.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.notifyCharEnableButton.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.notifyCharDisableButton.config(state=tk.DISABLED))
             
     def disconnectFromDevice(self):
         """Disconnect from the current device"""
@@ -713,8 +714,8 @@ class BLEScanner:
             self.root.after(0, lambda: self.disconnectButton.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.readCharButton.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.writeCharButton.config(state=tk.DISABLED))
-            self.root.after(0, lambda: self.subscribeCharEnableButton.config(state=tk.DISABLED))
-            self.root.after(0, lambda: self.subscribeCharDisableButton.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.notifyCharEnableButton.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.notifyCharDisableButton.config(state=tk.DISABLED))
 
     def readCharacteristic(self):
         """Manually read a characteristic value"""
@@ -722,7 +723,7 @@ class BLEScanner:
             messagebox.showerror("Error", "Not connected to a device")
             return
             
-        uuid = self.read_uuid_entry.get().strip()
+        uuid = self.readCharUuidEntry.get().strip()
         if not uuid:
             messagebox.showerror("Error", "Please enter a characteristic UUID")
             return
@@ -793,7 +794,7 @@ class BLEScanner:
             messagebox.showerror("Error", "Not connected to a device")
             return
             
-        uuid = self.write_uuid_entry.get().strip()
+        uuid = self.writeCharUuidEntry.get().strip()
         if not uuid:
             messagebox.showerror("Error", "Please enter a characteristic UUID")
             return
@@ -880,7 +881,7 @@ class BLEScanner:
             messagebox.showerror("Error", "Not connected to a device")
             return
             
-        uuid = self.notify_uuid_entry.get().strip()
+        uuid = self.notifyCharUuidEntry.get().strip()
         if not uuid:
             messagebox.showerror("Error", "Please enter a characteristic UUID")
             return
@@ -900,7 +901,7 @@ class BLEScanner:
             messagebox.showerror("Error", "Not connected to a device")
             return
             
-        uuid = self.notify_uuid_entry.get().strip()
+        uuid = self.notifyCharUuidEntry.get().strip()
         if not uuid:
             messagebox.showerror("Error", "Please enter a characteristic UUID")
             return
