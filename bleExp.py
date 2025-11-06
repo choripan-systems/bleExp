@@ -59,13 +59,13 @@ class BLEScanner:
         top_frame = ttk.Frame(self.root, padding="10")
         top_frame.pack(fill=tk.X)
         
-        ttk.Label(top_frame, text="Service Data UUID:").pack(side=tk.LEFT, padx=5)
+        ttk.Label(top_frame, text="Service UUID:").pack(side=tk.LEFT, padx=5)
         self.uuid_entry = ttk.Entry(top_frame, width=20)
         if self.service_uuid:
             self.uuid_entry.insert(0, self.service_uuid)
         self.uuid_entry.pack(side=tk.LEFT, padx=5)
 
-        ttk.Label(top_frame, text="Name Prefix:").pack(side=tk.LEFT, padx=(20, 5))
+        ttk.Label(top_frame, text="Device Name Prefix:").pack(side=tk.LEFT, padx=(20, 5))
         self.name_prefix_entry = ttk.Entry(top_frame, width=15)
         if self.device_name_prefix:
             self.name_prefix_entry.insert(0, self.device_name_prefix)
@@ -369,9 +369,9 @@ class BLEScanner:
         # Log scan criteria
         self.log(f"Scanning for devices matching:")
         if uuid_input:
-            self.log(f"  Service Data UUID: {uuid_input}")
-            self.log(f"  UUID Type: {uuid_type}")
-            self.log(f"  Full UUID: {full_uuid}")
+            self.log(f"  Advertised Service UUID: {uuid_input}")
+            #self.log(f"  UUID Type: {uuid_type}")
+            #self.log(f"  Full UUID: {full_uuid}")
         if name_prefix:
             self.log(f"  Device Name Prefix: '{name_prefix}'")
         self.log(f"Scan duration: {duration} seconds")
@@ -997,7 +997,7 @@ def main():
         '--svc-uuid',
         type=str,
         default=None,
-        help="Service Data UUID to match"
+        help="Advertised Service UUID to match"
     )
     parser.add_argument(
         '--dev-name-prefix',
