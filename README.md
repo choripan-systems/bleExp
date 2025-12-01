@@ -1,10 +1,10 @@
 # Intro
 
-**bleExp** is a simple Bluetooth Low Energy explorer app that supports the following features:
+**bleExp** is a simple Bluetooth Low Energy (BLE) explorer app that supports the following features:
 
-1. It can discover BLE devices that advertise a specified Service Data UUID and/or a Device Name that matches a specified prefix.
+1. It can discover BLE devices that advertise a specified Service UUID and/or a Device Name that matches a specified prefix.
 2. It can display the Advertisement Data sent by the selected device in its Advertisement Indication and Scan Response BLE messages.
-3. It can connect to the selected device and discover all its services and their characteristics. Characteristics that support the READ property have their value automatically read.
+3. It can connect to the selected device and discover all its services and their characteristics. Characteristics that support the READ property have their value automatically read and displayed.
 4. It can write an arbitrary value to any characteristic which supports the WRITE property.
 5. It can enable/disable notifications/indications on any characteristic that supports the NOTIFY/INDICATE property.
 6. It can save all session data into a log file.
@@ -31,7 +31,9 @@ Finally, the image below shows **bleExp** running under macOS.  Notice that in t
 
 # Running the app
 
-The app is written in Python, using [tkinter](https://docs.python.org/3/library/tkinter.html) for the GUI and [bleak](https://github.com/hbldh/bleak) for BLE communication with the peripheral device.
+**bleExp** is written in Python, so it needs a Python 3 runtime environment to work.  If the system you are using doesn't have Python pre-installed, you can download it from [here](https://www.python.org/downloads/). The installation is pretty straightforward.
+
+The app uses [tkinter](https://docs.python.org/3/library/tkinter.html) for the GUI and [bleak](https://github.com/hbldh/bleak) for the BLE communication with the peripheral device. So you may need to install these modules as well.
 
 To run the app inside a virtual environment on Linux or macOS, simply follow these steps:
 
@@ -39,19 +41,37 @@ To run the app inside a virtual environment on Linux or macOS, simply follow the
 python3 -m venv venv
 source venv/bin/activate
 pip install bleak
-python3 bleExp.py [--svc-uuid <uuid>] [--dev-name-prefix <prefix>] [--scan-duration <seconds>] [--log-file <path>] [--text-font-size <points>]
+pip install tkinter
 ```
---svc-uuid specifies the Service UUID to scan for in the BLE advertisements.
 
---dev-name-prefix specifies the case-sensitive Device Name prefix to scan for in the BLE advertisements.
+Running the app with the --help option will show all the available command-line options:
 
---scan-duration specifies the duration (in seconds) of the device scan process.
+```bash
+python3 bleExp.py --help
+usage: bleExp.py [-h] [--auto-scan] [--dev-name-prefix DEV_NAME_PREFIX] [--log-file LOG_FILE]
+                 [--scan-duration SCAN_DURATION] [--svc-uuid SVC_UUID] [--text-font-size TEXT_FONT_SIZE]
 
---log-file specifies the pathname of the file where the app saves all the log output.
+BLE Device Explorer - Scan and connect to Bluetooth Low Energy devices
 
---text-font-size specifies the size (in points) of the font used to display the output text.
+options:
+  -h, --help            show this help message and exit
+  --auto-scan           Enable auto scan upon start up
+  --dev-name-prefix DEV_NAME_PREFIX
+                        Device name prefix to match
+  --log-file LOG_FILE   Optional log file where to save all output (appends to existing file)
+  --scan-duration SCAN_DURATION
+                        Duration of the device scan (default: 5 seconds)
+  --svc-uuid SVC_UUID   Advertised Service UUID to match
+  --text-font-size TEXT_FONT_SIZE
+                        Font size used for the text output (default: 10 points)
+```
 
-On systems that use the GNOME desktop, the supplied bleExp.desktop file can be used to launch the app. You just need to copy it to your $HOME/.local/share/applications/ folder, and replace all instances of "path-to-bleExp-folder" inside the file, for the corresponding full path to the folder where you installed **bleExp** :
+When neither --dev-name-prefix nor --svc-uuid are specified, the app will run in "promiscuous" mode, showing **all** the BLE devices it found within reach during the scan.
+
+>[!TIP]
+>On systems that use the GNOME desktop, the supplied bleExp.desktop file can be used to launch the app by simply double-clicking its icon.
+>
+>You just need to copy the file to your $HOME/.local/share/applications/ folder, and replace all instances of "path-to-bleExp-folder" inside the file, for the corresponding full path to the folder where you installed **bleExp** :
 
 ``` bash
 cp bleExp.desktop $HOME/.local/share/applications/
@@ -59,13 +79,16 @@ chmod +x $HOME/.local/share/applications/bleExp.desktop
 sed -i s'/path-to-bleExp-folder/<path>/g' $HOME/.local/share/applications/bleExp.desktop
 ```
 
-For example, if your username is "jdoe" and you installed **bleExp** in the $HOME/Apps/bleExp folder, then the sed command to use would be:
+For example, if your username is "jdoe" and you installed **bleExp** in your $HOME/Apps/bleExp folder, then the sed command to use would be:
 
 ``` bash
 sed -i s'/path-to-bleExp-folder/\/home\/jdoe\/Apps\/bleExp/g' $HOME/.local/share/applications/bleExp.desktop
 ```
 
-Notice that in some cases you may need to log out and log back in for the **bleExp** icon to show up in the app launcher panel. In the image below you can see the icon listed in the lower-right corner inside the panel:
+> [!IMPORTANT]
+> In some cases you may need to log out and log back in for the **bleExp** icon to show up in the app launcher panel.
+
+In the image below you can see the icon listed in the lower-right corner inside the panel:
 
 ![GNOME app launch panel](./assets/gnome-app-launch-panel.png)
 
