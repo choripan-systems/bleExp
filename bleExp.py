@@ -13,7 +13,20 @@ class BLEScanner:
     def __init__(self, root, cmdArgs):
         self.root = root
         self.root.title("BLE Device Explorer")
-        self.root.geometry("1000x1080")
+
+        # Get screen dimensions
+        screenWidth = root.winfo_screenwidth()
+        screenHeight = root.winfo_screenheight()
+        
+        # Calculate window size (80% of screen or max 1000x900)
+        windowWidth = min(1050, int(screenWidth * 0.8))
+        windowHeight = min(900, int(screenHeight * 0.85))
+        
+        # Center the window
+        x = (screenWidth - windowWidth) // 2
+        y = (screenHeight - windowHeight) // 2
+        
+        self.root.geometry(f"{windowWidth}x{windowHeight}+{x}+{y}")
         
         # Set custom icon if available
         try:
@@ -58,8 +71,46 @@ class BLEScanner:
         self.createWidgets()
         
     def createWidgets(self):
+        # Create main container with scrollbar
+        main_container = ttk.Frame(self.root)
+        main_container.pack(fill=tk.BOTH, expand=True)
+        
+        # Create canvas and scrollbar
+        canvas = tk.Canvas(main_container)
+        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
+        
+        # Create scrollable frame
+        scrollable_frame = ttk.Frame(canvas)
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Bind mouse wheel for scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        
+        # Bind mouse wheel to canvas and all child widgets
+        def bind_mousewheel(widget):
+            widget.bind("<MouseWheel>", _on_mousewheel)
+            for child in widget.winfo_children():
+                bind_mousewheel(child)
+        
+        bind_mousewheel(scrollable_frame)
+        canvas.bind("<MouseWheel>", _on_mousewheel)
+        
+        # Use scrollable_frame as the parent for all widgets
+        container = scrollable_frame
+        
         # Top frame for UUID input and scan button
-        topFrame = ttk.Frame(self.root, padding="10")
+        topFrame = ttk.Frame(container, padding="10")
         topFrame.pack(fill=tk.X)
         
         ttk.Label(topFrame, text="Service UUID:").pack(side=tk.LEFT, padx=5)
@@ -86,10 +137,10 @@ class BLEScanner:
         self.statusLabel.pack(side=tk.LEFT, padx=20)
         
         # Separator
-        ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
+        ttk.Separator(container, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
         
         # Device list frame
-        devicesFrame = ttk.LabelFrame(self.root, text="Discovered Devices", padding="10")
+        devicesFrame = ttk.LabelFrame(container, text="Discovered Devices", padding="10")
         devicesFrame.pack(fill=tk.BOTH, expand=False, padx=10, pady=5)
         
         # Create listbox with scrollbar
@@ -121,7 +172,7 @@ class BLEScanner:
 
         self.connectButton = ttk.Button(
             buttonsFrame,
-            text="Connect to Selected Device",
+            text="Connect to Device",
             command=self.connectToSelected,
             state=tk.DISABLED
         )
@@ -140,13 +191,13 @@ class BLEScanner:
         self.disconnectButton.pack(side=tk.RIGHT, padx=5)
         
         # Separator
-        ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
+        ttk.Separator(container, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
         
         # Main output area
-        outputDataFrame = ttk.Frame(self.root, padding="10")
+        outputDataFrame = ttk.Frame(container, padding="10")
         outputDataFrame.pack(fill=tk.BOTH, expand=True)
         
-        ttk.Label(outputDataFrame, text="Device Information:").pack(anchor=tk.W)
+        ttk.Label(outputDataFrame, text="Output Log:").pack(anchor=tk.W)
         
         self.outputText = scrolledtext.ScrolledText(
             outputDataFrame, 
@@ -158,11 +209,11 @@ class BLEScanner:
         self.outputText.pack(fill=tk.BOTH, expand=True, pady=5)
         
         # Read characteristic frame
-        readCharFrame = ttk.LabelFrame(self.root, text="Read Characteristic", padding="10")
+        readCharFrame = ttk.LabelFrame(container, text="Read Characteristic", padding="10")
         readCharFrame.pack(fill=tk.X, padx=10, pady=5)
         
         # Characteristic UUID for reading
-        ttk.Label(readCharFrame, text="Char UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(readCharFrame, text="UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
         self.readCharUuidEntry = ttk.Entry(readCharFrame, width=40)
         self.readCharUuidEntry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
         
@@ -179,11 +230,11 @@ class BLEScanner:
         readCharFrame.columnconfigure(1, weight=1)
         
         # Write characteristic frame
-        writeCharFrame = ttk.LabelFrame(self.root, text="Write to Characteristic", padding="10")
+        writeCharFrame = ttk.LabelFrame(container, text="Write Characteristic", padding="10")
         writeCharFrame.pack(fill=tk.X, padx=10, pady=5)
         
         # Characteristic UUID
-        ttk.Label(writeCharFrame, text="Char UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(writeCharFrame, text="UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
         self.writeCharUuidEntry = ttk.Entry(writeCharFrame, width=40)
         self.writeCharUuidEntry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
         
@@ -215,11 +266,11 @@ class BLEScanner:
         writeCharFrame.columnconfigure(1, weight=1)
         
         # Notification/Indication frame
-        notifyCharFrame = ttk.LabelFrame(self.root, text="Notifications/Indications", padding="10")
+        notifyCharFrame = ttk.LabelFrame(container, text="Configure Notifications", padding="10")
         notifyCharFrame.pack(fill=tk.X, padx=10, pady=5)
         
         # Characteristic UUID for notifications
-        ttk.Label(notifyCharFrame, text="Char UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(notifyCharFrame, text="UUID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
         self.notifyCharUuidEntry = ttk.Entry(notifyCharFrame, width=40)
         self.notifyCharUuidEntry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=2)
         
@@ -229,7 +280,7 @@ class BLEScanner:
         
         self.notifyCharEnableButton = ttk.Button(
             buttonsFrame, 
-            text="Enable Notifications", 
+            text="Enable", 
             command=self.enableCharNotifications,
             state=tk.DISABLED
         )
@@ -237,7 +288,7 @@ class BLEScanner:
         
         self.notifyCharDisableButton = ttk.Button(
             buttonsFrame, 
-            text="Disable Notifications", 
+            text="Disable", 
             command=self.disableCharNotifications,
             state=tk.DISABLED
         )
@@ -445,7 +496,7 @@ class BLEScanner:
             
             # Populate device list
             self.root.after(0, self._populate_device_list)
-            self.updateStatus(f"Found {len(matchingDevices)} device(s) - Select one to connect", "blue")
+            self.updateStatus(f"Found {len(matchingDevices)} device(s)", "blue")
             
         except Exception as e:
             self.log(f"\nScan error: {str(e)}")
