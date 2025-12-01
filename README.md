@@ -9,11 +9,13 @@
 5. It can enable/disable notifications/indications on any characteristic that supports the NOTIFY/INDICATE property.
 6. It can save all session data into a log file.
 
-The image below shows the **bleExp** app discovering indoor bike trainers that support the [Fitness Machine Service](https://www.bluetooth.com/specifications/specs/html/?src=ftms-v1-0-1_1756429637/FTMS_v1.0.1/out/en/index-en.html), to which the BLE SIG assigned the UUID 0x1826. In this example the app discovered two devices: a Wahoo KICKR and a Zwift Hub.  Selecting any of the discovered devices and pressing the "Show Advertisement Data" button displays all the data sent by the device in its Advertisement Indication and Scan Response messages:
+The image below shows the **bleExp** app discovering indoor bike trainers that support the standard BLE [Fitness Machine Service](https://www.bluetooth.com/specifications/specs/html/?src=ftms-v1-0-1_1756429637/FTMS_v1.0.1/out/en/index-en.html), with UUID 0x1826. In this example the app discovered two such devices: a Wahoo KICKR and a Zwift Hub.  
+
+Selecting any of the discovered devices and pressing the "Show Advertisement Data" button displays all the data sent by the device in its Advertisement Indication and Scan Response messages:
 
 ![bleExp app discovering indoor bike trainers](./assets/bleExp-Demo-1.png)
 
-Pressing the "Connect to Selected Device" button makes the app establish a connection to the target device, and discover all its services and characteristics. Characteristics that support the READ attribute are automatically read, and the value is shown on the output log:
+Pressing the "Connect to Device" button makes the app establish a connection to the target device, and discover all its services and characteristics. Characteristics that support the READ attribute are automatically read, and the value is shown on the output log:
 
 ![bleExp app showing the advertisement data of the selected device](./assets/bleExp-Demo-2.png)
 
@@ -31,7 +33,7 @@ Finally, the image below shows **bleExp** running under macOS.  Notice that in t
 
 # Running the app
 
-**bleExp** is written in Python, so it needs a Python 3 runtime environment to work.  If the system you are using doesn't have Python pre-installed, you can download it from [here](https://www.python.org/downloads/). The installation is pretty straightforward.
+**bleExp** is written in Python, so it needs a Python 3 runtime environment to work.  If the system you are using doesn't have Python pre-installed, you can install it directly from the Microsoft Store (Windows 11) or download it from [here](https://www.python.org/downloads/) (Linux/macOS). The installation is pretty straightforward.
 
 The app uses [tkinter](https://docs.python.org/3/library/tkinter.html) for the GUI and [bleak](https://github.com/hbldh/bleak) for the BLE communication with the peripheral device. So you may need to install these modules as well.
 
