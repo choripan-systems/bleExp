@@ -72,12 +72,12 @@ class BLEScanner:
         
     def createWidgets(self):
         # Create main container with scrollbar
-        main_container = ttk.Frame(self.root)
-        main_container.pack(fill=tk.BOTH, expand=True)
+        mainContainer = ttk.Frame(self.root)
+        mainContainer.pack(fill=tk.BOTH, expand=True)
         
         # Create canvas and scrollbar
-        canvas = tk.Canvas(main_container)
-        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
+        canvas = tk.Canvas(mainContainer)
+        scrollbar = ttk.Scrollbar(mainContainer, orient="vertical", command=canvas.yview)
         
         # Create scrollable frame
         scrollable_frame = ttk.Frame(canvas)
@@ -130,7 +130,7 @@ class BLEScanner:
         self.scanDurationEntry.insert(0, self.scanDuration)
         self.scanDurationEntry.pack(side=tk.LEFT, padx=5)
         
-        self.scanButton = ttk.Button(topFrame, text="Start Scan", command=self.toggleScan)
+        self.scanButton = ttk.Button(topFrame, text="Scan", command=self.toggleScan)
         self.scanButton.pack(side=tk.LEFT, padx=5)
         
         self.statusLabel = ttk.Label(topFrame, text="Ready", foreground="blue")
@@ -173,7 +173,7 @@ class BLEScanner:
         self.connectButton = ttk.Button(
             buttonsFrame,
             text="Connect to Device",
-            command=self.connectToSelected,
+            command=self.connectToDevice,
             state=tk.DISABLED
         )
         self.connectButton.pack(side=tk.LEFT, padx=5)
@@ -520,7 +520,7 @@ class BLEScanner:
             self.showAdvDataButton.config(state=tk.NORMAL)
             self.deviceListbox.selection_set(0)  # Select first device by default
             
-    def connectToSelected(self):
+    def connectToDevice(self):
         """Connect to the device selected in the listbox"""
         selection = self.deviceListbox.curselection()
         if not selection:
@@ -535,8 +535,8 @@ class BLEScanner:
         self.updateStatus(f"Connecting to {device.address}...", "green")
         
         # Disable buttons during connection
-        self.connectButton.config(state=tk.DISABLED)
         self.showAdvDataButton.config(state=tk.DISABLED)
+        self.connectButton.config(state=tk.DISABLED)
         
         # Run connection in separate thread
         thread = threading.Thread(target=self.runConnect, args=(device,), daemon=True)
@@ -547,7 +547,7 @@ class BLEScanner:
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         try:
-            self.loop.run_until_complete(self.connect_and_explore(device))
+            self.loop.run_until_complete(self.connectAndExplore(device))
         except Exception as e:
             self.log(f"Connection error: {str(e)}")
             self.updateStatus(f"Error: {str(e)}", "red")
@@ -622,42 +622,46 @@ class BLEScanner:
         else:
             self.log("No advertisement data available for this device")
             
-    async def connect_and_explore(self, device):
+    async def connectAndExplore(self, device):
         """Connect to device and read all services/characteristics"""
         try:
             self.client = BleakClient(device.address)
             await self.client.connect()
             
-            self.root.after(0, lambda: self.disconnectButton.config(state=tk.NORMAL))
-            
             if not self.client.is_connected:
                 self.log("Failed to connect")
+                self.root.after(0, lambda: self.showAdvDataButton.config(state=tk.NORMAL))
+                self.root.after(0, lambda: self.connectButton.config(state=tk.NORMAL))
                 return
-                
+            
             self.log("Connected successfully!\n")
             self.updateStatus("Connected - Reading services...", "green")
             
+            # Now that we are connected we can enable the disconnect button
+            self.root.after(0, lambda: self.disconnectButton.config(state=tk.NORMAL))
+            
             # Get all services
             services = self.client.services
-            service_list = list(services)
+            serviceList = list(services)
+            
             # Sort services by UUID
-            service_list.sort(key=lambda s: s.uuid)
-            self.log(f"Device has {len(service_list)} service(s):\n")
+            serviceList.sort(key=lambda s: s.uuid)
+            self.log(f"Device has {len(serviceList)} service(s):\n")
             self.log("=" * 80)
 
             self.readableCharacteristics.clear()            
             self.writableCharacteristics.clear()
             self.notifiableCharacteristics.clear()
             
-            for service in service_list:
+            for service in serviceList:
                 self.log(f"\nService: {service.uuid}")
                 self.log(f"    Description: {service.description}")
                 self.log(f"    Characteristics: {len(service.characteristics)}")
                 
                 # Sort characteristics by UUID
-                char_list = sorted(service.characteristics, key=lambda c: c.uuid)
+                charList = sorted(service.characteristics, key=lambda c: c.uuid)
                 
-                for char in char_list:
+                for char in charList:
                     self.log(f"\n    Characteristic: {char.uuid}")
                     self.log(f"        Description: {char.description}")
                     self.log(f"        Properties: {', '.join(char.properties)}")
@@ -700,17 +704,17 @@ class BLEScanner:
             self.log("\n" + "=" * 80)
             self.log("\nExploration complete!")
             
+            self.log("\n")
             if self.readableCharacteristics:
                 self.log(f"Found {len(self.readableCharacteristics)} readable characteristic(s)")
                 self.root.after(0, self._enable_read_button)
-                            
             if self.writableCharacteristics:
-                self.log(f"\nFound {len(self.writableCharacteristics)} writable characteristic(s)")
+                self.log(f"Found {len(self.writableCharacteristics)} writable characteristic(s)")
                 self.root.after(0, self._enable_write_button)
-            
             if self.notifiableCharacteristics:
                 self.log(f"Found {len(self.notifiableCharacteristics)} notifiable/indicatable characteristic(s)")
                 self.root.after(0, self._enable_notify_buttons)
+            self.log("\n")
             
             self.updateStatus("Connected and ready", "blue")
             
@@ -728,6 +732,8 @@ class BLEScanner:
             self.writableCharacteristics.clear()
             self.notifiableCharacteristics.clear()
             self.activeNotifications.clear()
+            self.root.after(0, lambda: self.showAdvDataButton.config(state=tk.NORMAL))
+            self.root.after(0, lambda: self.connectButton.config(state=tk.NORMAL))            
             self.root.after(0, lambda: self.disconnectButton.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.readCharButton.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.writeCharButton.config(state=tk.DISABLED))
@@ -768,6 +774,8 @@ class BLEScanner:
             self.notifiableCharacteristics.clear()
             self.activeNotifications.clear()
             self.updateStatus("Disconnected", "orange")
+            self.root.after(0, lambda: self.showAdvDataButton.config(state=tk.NORMAL))
+            self.root.after(0, lambda: self.connectButton.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.disconnectButton.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.readCharButton.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.writeCharButton.config(state=tk.DISABLED))
@@ -788,17 +796,17 @@ class BLEScanner:
         # Schedule the read operation in the same event loop
         if self.loop and self.loop.is_running():
             asyncio.run_coroutine_threadsafe(
-                self.read_char_value(uuid),
+                self.readCharValue(uuid),
                 self.loop
             )
         else:
             messagebox.showerror("Error", "Event loop not available")
             
-    async def read_char_value(self, uuid):
+    async def readCharValue(self, uuid):
         """Read a characteristic value"""
         try:
             # Normalize UUID
-            normalizedUuid = self.normalize_uuid(uuid)
+            normalizedUuid = self.normalizeUuid(uuid)
             
             # Check if this characteristic supports reading
             if normalizedUuid not in self.readableCharacteristics:
@@ -864,7 +872,7 @@ class BLEScanner:
         # Schedule the write operation in the same event loop
         if self.loop and self.loop.is_running():
             asyncio.run_coroutine_threadsafe(
-                self.write_value(uuid, value_str, self.value_type.get()),
+                self.writeCharValue(uuid, value_str, self.value_type.get()),
                 self.loop
             )
         else:
@@ -874,11 +882,11 @@ class BLEScanner:
         """Deprecated - no longer used"""
         pass
             
-    async def write_value(self, uuid, value_str, value_type):
+    async def writeCharValue(self, uuid, value_str, value_type):
         """Write a value to a characteristic"""
         try:
             # Normalize UUID
-            normalizedUuid = self.normalize_uuid(uuid)
+            normalizedUuid = self.normalizeUuid(uuid)
             
             # Check if this is a writable characteristic
             if normalizedUuid not in self.writableCharacteristics:
@@ -976,7 +984,7 @@ class BLEScanner:
         """Start notifications/indications for a characteristic"""
         try:
             # Normalize UUID
-            normalizedUuid = self.normalize_uuid(uuid)
+            normalizedUuid = self.normalizeUuid(uuid)
             
             # Check if this characteristic supports notifications/indications
             if normalizedUuid not in self.notifiableCharacteristics:
@@ -1016,7 +1024,7 @@ class BLEScanner:
         """Stop notifications/indications for a characteristic"""
         try:
             # Normalize UUID
-            normalizedUuid = self.normalize_uuid(uuid)
+            normalizedUuid = self.normalizeUuid(uuid)
             
             # Check if notifications are active
             if normalizedUuid not in self.activeNotifications:
@@ -1034,18 +1042,18 @@ class BLEScanner:
             self.log(f"\nFailed to disable notifications: {str(e)}")
             self.updateStatus(f"Notification error: {str(e)}", "red")
             
-    def normalize_uuid(self, uuid):
+    def normalizeUuid(self, uuid):
         """Normalize UUID to full 128-bit format with lowercase"""
         # Remove spaces and dashes
-        uuid_clean = uuid.replace("-", "").replace(" ", "").lower()
+        uuidClean = uuid.replace("-", "").replace(" ", "").lower()
         
         # Check length
-        if len(uuid_clean) == 4:
+        if len(uuidClean) == 4:
             # 16-bit UUID - convert to 128-bit
-            return f"0000{uuid_clean}-0000-1000-8000-00805f9b34fb"
-        elif len(uuid_clean) == 32:
+            return f"0000{uuidClean}-0000-1000-8000-00805f9b34fb"
+        elif len(uuidClean) == 32:
             # 128-bit UUID - format with dashes
-            return f"{uuid_clean[0:8]}-{uuid_clean[8:12]}-{uuid_clean[12:16]}-{uuid_clean[16:20]}-{uuid_clean[20:32]}"
+            return f"{uuidClean[0:8]}-{uuidClean[8:12]}-{uuidClean[12:16]}-{uuidClean[16:20]}-{uuidClean[20:32]}"
         else:
             # Return as-is and let it fail with proper error message
             return uuid.lower()
