@@ -386,6 +386,7 @@ class BLEScanner:
         self.serviceUuidEntry.config(state=tk.DISABLED)
         self.deviceNamePrefixEntry.config(state=tk.DISABLED)
         self.scanDurationEntry.config(state=tk.DISABLED)
+        self.deviceListbox.delete(0, tk.END)
         self.outputText.delete(1.0, tk.END)
         
         # Run scan in separate thread
